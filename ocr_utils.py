@@ -2,7 +2,8 @@ import fitz  # PyMuPDF
 import ocrmypdf
 import PyPDF2
 import os
-
+import shutil
+#reminder to implement OCR and download to computer
 def is_scanned(pdf_path):
     doc = fitz.open(pdf_path)
     for page in doc:
