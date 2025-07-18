@@ -1,0 +1,9 @@
+streamlit
+PyPDF2
+pymupdf
+ocrmypdf
+transformers
+torch
+scikit-learn
+pandas
+numpy
