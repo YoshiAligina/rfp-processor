@@ -4,14 +4,15 @@ import streamlit as st
 import pandas as pd
 from ocr_utils import is_scanned, convert_scanned, extract_text
 from model_utils import predict_document_probability
-from data_utils import add_entry_to_db, load_db
+from data_utils import add_entry_to_db, load_db, update_decision 
+
 
 PDF_FOLDER = "rfps"
 
 def main():
     st.title("📄 RFP Predictor & Batch Uploader (Longformer Version)")
 
-    st.header("📤 Batch Upload RFPs")
+    st.header("Batch Upload RFPs")
     uploaded_files = st.file_uploader(
         "Upload one or more PDFs", type=["pdf"], accept_multiple_files=True
     )
@@ -43,7 +44,7 @@ def main():
                         key=f"decision_{uploaded_file.name}"
                     )
                 )
-            submitted = st.form_submit_button("🚀 Process and Add All")
+            submitted = st.form_submit_button(" Process and Add All")
 # Process each uploaded PDF 
         if submitted:
             for idx, uploaded_file in enumerate(uploaded_files):
@@ -56,7 +57,7 @@ def main():
                 processed_path = pdf_path
                 if is_scanned(pdf_path):
                     if shutil.which("tesseract") and shutil.which("gs"):
-                        st.info(f"🔎 Applying OCR to scanned PDF: {uploaded_file.name}")
+                        st.info(f" Applying OCR to scanned PDF: {uploaded_file.name}")
                         processed_path = convert_scanned(
                             pdf_path,
                             pdf_path.replace(".pdf", "_ocr.pdf")
@@ -82,40 +83,54 @@ def main():
                 }
 
                 add_entry_to_db(entry)
-                st.success(f"✅ {uploaded_file.name} processed and added!")
+                st.success(f" {uploaded_file.name} processed and added!")
 
-    st.header("📊 RFP Database Review")
+    st.header(" RFP Database Review")
     df = load_db()
     if not df.empty:
         df_sorted = df.sort_values("probability", ascending=False)
 
         # Download CSV
         st.download_button(
-            "⬇️ Download CSV",
+            "⬇ Download CSV",
             data=df_sorted.to_csv(index=False),
             file_name="rfp_db.csv",
             mime="text/csv"
         )
 
-        # PDF Downloads
+        # PDF Downloads and Editable Decision
         for _, row in df_sorted.iterrows():
             with st.expander(f"{row['title']} ({row['filename']}) — {row['probability']:.2%}"):
                 st.write(f"**From:** {row['sender']}")
-                st.write(f"**Decision:** {row['decision']}")
                 st.write(f"**Probability of being 'worth it':** {row['probability']:.2%}")
                 st.write(f"**Excerpt:** {row['excerpt']}")
 
+                # Editable decision
+                current_decision = row['decision']
+                new_decision = st.selectbox(
+                    f"Update decision for {row['filename']}",
+                    options=["Pending", "Approved", "Denied"],
+                    index=["Pending", "Approved", "Denied"].index(current_decision),
+                    key=f"decision_update_{row['filename']}"
+                )
+
+                if new_decision != current_decision:
+                    if st.button(f" Save New Decision for {row['filename']}", key=f"save_decision_{row['filename']}"):
+                        update_decision(row['filename'], new_decision)
+                        st.success(f"Updated decision to '{new_decision}'")
+                        st.rerun()  # Refresh after update
+
+                # PDF download
                 file_path = os.path.join(PDF_FOLDER, row['filename'])
                 if os.path.exists(file_path):
                     with open(file_path, "rb") as f:
                         st.download_button(
-                            f"📥 Download {row['filename']}",
+                            f" Download {row['filename']}",
                             data=f.read(),
                             file_name=row['filename'],
                             mime="application/pdf"
                         )
     else:
-        st.write("ℹ️ No entries in the database yet.")
-
+        st.write("ℹ️ No RFPs in the database yet.")
 if __name__ == "__main__":
     main()
