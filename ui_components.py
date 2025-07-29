@@ -14,9 +14,8 @@ def generate_document_summary(text, max_sentences=3):
     if len(sentences) <= max_sentences:
         return ' '.join(sentences[:max_sentences]) + '.'
     
-    # Simple scoring based on length and position (earlier sentences often more important)
     scored_sentences = []
-    for i, sentence in enumerate(sentences[:10]):  # Only consider first 10 sentences
+    for i, sentence in enumerate(sentences[:40]):  
         # Score based on length (prefer medium-length sentences) and position (prefer earlier)
         length_score = min(len(sentence) / 100, 1.0)  # Normalize to 0-1
         position_score = (10 - i) / 10  # Earlier sentences get higher score

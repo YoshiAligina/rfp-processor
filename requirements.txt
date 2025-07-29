@@ -11,3 +11,5 @@ langchain
 python-docx
 openpyxl
 xlrd
+datasets
+accelerate

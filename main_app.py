@@ -7,7 +7,7 @@ import os
 import re
 from data_utils import load_db, update_probability
 from document_utils import extract_text_from_file
-from model_utils import predict_document_probability
+from model_utils import predict_document_probability, manual_fine_tune, get_model_info
 
 # Import our modular components
 from ui_styles import UI_STYLES
@@ -86,33 +86,54 @@ def render_database_metrics(df):
         )
     
     # Model status info
-    approved_count = count_unique_rfps_by_decision(df, 'Approved')
-    denied_count = count_unique_rfps_by_decision(df, 'Denied')
+    model_info = get_model_info()
+    approved_count = model_info['approved_count']
+    denied_count = model_info['denied_count']
     pending_count = count_unique_rfps_by_decision(df, 'Pending')
+    has_finetuned = model_info['has_fine_tuned_model']
     
-    if approved_count + denied_count > 0:
-        st.info(f"Model Status: Learning from {approved_count} approved and {denied_count} denied RFPs. {pending_count} pending RFPs will get more accurate scores as you make decisions.")
+    # Model status display
+    if has_finetuned:
+        st.success(f"🎯 **Fine-tuned Model Active**: Trained on {approved_count} approved and {denied_count} denied RFPs. Model predictions are optimized for your decision patterns!")
+    elif approved_count + denied_count > 0:
+        st.info(f"📚 **Learning Mode**: Using similarity learning from {approved_count} approved and {denied_count} denied RFPs. Consider fine-tuning for better accuracy!")
     else:
-        st.warning("Model Status: No historical decisions yet. Start approving/denying RFPs to improve prediction accuracy!")
+        st.warning("🔄 **Initial Mode**: No historical decisions yet. Start approving/denying RFPs to improve prediction accuracy!")
+    
+    if pending_count > 0:
+        st.info(f"⏳ {pending_count} pending RFPs will get more accurate scores as you make more decisions.")
 
 def render_database_controls(df):
     """Render the database control section"""
     st.markdown("---")
     
-    col1, col2, col3 = st.columns([2, 2, 1])
+    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
     
     with col1:
         if st.button("Rerun Model for All Entries", use_container_width=True):
             handle_model_rerun(df)
     
     with col2:
+        model_info = get_model_info()
+        historical_count = model_info['historical_decisions']
+        
+        # Show fine-tuning button if we have enough data
+        if historical_count >= 2:
+            if st.button("🎯 Fine-tune Model", use_container_width=True, 
+                        help=f"Train model on your {historical_count} decisions for better accuracy"):
+                handle_fine_tuning()
+        else:
+            st.button("🎯 Fine-tune Model", use_container_width=True, 
+                     disabled=True, help="Need at least 2 decisions to fine-tune")
+    
+    with col3:
         filter_option = st.selectbox(
             "Filter by Status",
             ["All", "Pending", "Approved", "Denied"],
             help="Filter RFPs by their current status"
         )
     
-    with col3:
+    with col4:
         sort_option = st.selectbox(
             "Sort by",
             ["Score (High to Low)", "Score (Low to High)", "Title", "Date Added"]
@@ -146,6 +167,20 @@ def handle_model_rerun(df):
         st.success(f"Model rerun complete! Updated {rerun_count} entries with improved learning from your decisions.")
     st.rerun()
 
+def handle_fine_tuning():
+    """Handle the fine-tuning process"""
+    with st.spinner("Fine-tuning model on your decisions... This may take a few minutes."):
+        try:
+            success = manual_fine_tune()
+            if success:
+                st.success("🎯 Model fine-tuning completed successfully! The model is now optimized for your decision patterns.")
+                st.info("💡 Future predictions will be more accurate. Consider rerunning predictions for existing entries.")
+            else:
+                st.error("❌ Fine-tuning failed. Please check the logs for details.")
+        except Exception as e:
+            st.error(f"❌ Fine-tuning error: {str(e)}")
+    st.rerun()
+
 def render_database_entries(df, filter_option, sort_option):
     """Render the database entries with filtering and sorting"""
     filtered_df = df.copy()
@@ -171,9 +206,11 @@ def render_database_entries(df, filter_option, sort_option):
         if is_project_file:
             # Extract project identifier from title (before the " - filename" part)
             if ' - ' in row['title']:
-                project_key = f"{row['title'].split(' - ')[0]}_{row['sender']}_{row['probability']:.3f}"
+                project_title_base = row['title'].split(' - ')[0]
+                project_key = f"{project_title_base}_{row['sender']}"
             else:
-                project_key = f"{row['title']}_{row['sender']}_{row['probability']:.3f}"
+                project_title_base = row['title']
+                project_key = f"{row['title']}_{row['sender']}"
             
             # Skip if we already displayed this project
             if project_key in displayed_projects:
@@ -181,23 +218,25 @@ def render_database_entries(df, filter_option, sort_option):
             
             displayed_projects.add(project_key)
             
-            # Find all files in this project
+            # Find all files in this project - use more flexible matching
             if ' - ' in row['title']:
-                project_title_base = row['title'].split(' - ')[0]
+                # For projects with multiple files, find all files with the same base title and sender
                 project_files = filtered_df[
-                    (filtered_df['title'].str.contains(f"^{re.escape(project_title_base)} - ", na=False, regex=True)) &
+                    (filtered_df['title'].str.startswith(f"{project_title_base} - ", na=False) | 
+                     (filtered_df['title'] == project_title_base)) &
                     (filtered_df['sender'] == row['sender']) &
-                    (abs(filtered_df['probability'] - row['probability']) < 0.01)
+                    (filtered_df['summary'].str.contains("RFP Project:", na=False))
                 ]
             else:
+                # For single-file projects, just match by title and sender
                 project_files = filtered_df[
                     (filtered_df['title'] == row['title']) &
                     (filtered_df['sender'] == row['sender']) &
-                    (abs(filtered_df['probability'] - row['probability']) < 0.01)
+                    (filtered_df['summary'].str.contains("RFP Project:", na=False))
                 ]
             
             # Display project as a single entry
-            display_project_entry(row, project_files, project_title_base if ' - ' in row['title'] else row['title'])
+            display_project_entry(row, project_files, project_title_base)
         
         else:
             # Display individual file entry
