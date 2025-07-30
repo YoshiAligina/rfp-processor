@@ -1,6 +1,25 @@
 # UI Styles for RFP Analyzer
 # Contains all CSS styling for the Streamlit application
 
+"""
+User Interface Styling for RFP Processing Application
+
+This module contains comprehensive CSS styling definitions for the Streamlit-based
+RFP analysis interface. It provides consistent visual design elements including
+color schemes, typography, component styling, and responsive layouts. The styling
+system creates a professional, cohesive user experience with branded colors,
+intuitive visual feedback, and clear information hierarchy.
+
+Key styling features:
+- Consistent brand color scheme (green palette)
+- Professional card-based layouts
+- Status badges with semantic colors
+- Responsive component styling
+- Upload area visual enhancements
+- Interactive element styling
+- Accessibility-focused design elements
+"""
+
 UI_STYLES = """
 <style>
 /* Main background and body styling */

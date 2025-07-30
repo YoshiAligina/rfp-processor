@@ -1,5 +1,24 @@
 # Upload Handler - Handles file upload and processing logic
 
+"""
+File Upload and Processing Handler for RFP Analysis System
+
+This module manages the complete file upload workflow including metadata collection,
+document processing, ML prediction generation, and database storage. It supports
+both individual document processing and project-grouped submissions where multiple
+files belong to a single RFP. The module integrates text extraction, OCR processing,
+and intelligent summarization to create comprehensive RFP entries.
+
+Key features:
+- Flexible upload modes (individual documents vs. grouped projects)
+- Comprehensive metadata collection with intelligent defaults
+- Multi-format document processing (PDF, DOCX, Excel)
+- Real-time ML probability prediction
+- Intelligent document summarization
+- Progress tracking and error handling
+- Database integration with duplicate detection
+"""
+
 import streamlit as st
 import os
 from ocr_utils import is_scanned, extract_text
@@ -11,7 +30,20 @@ from ui_components import generate_document_summary
 PDF_FOLDER = "documents"
 
 def handle_file_upload_form(uploaded_files):
-    """Handle the file upload form and metadata collection"""
+    """
+    Creates and manages the comprehensive file upload form interface with metadata collection.
+    This function orchestrates the complete upload workflow, providing users with options
+    for individual or grouped processing, collecting necessary metadata, and preparing
+    files for processing. It creates an intuitive form interface that adapts based on
+    user selections and provides clear guidance for both single document and multi-file
+    project submissions. Returns all collected metadata for downstream processing.
+    
+    Args:
+        uploaded_files (list): List of Streamlit UploadedFile objects
+        
+    Returns:
+        tuple: Contains submission status, processing mode, and all collected metadata
+    """
     st.success(f"{len(uploaded_files)} file(s) uploaded successfully!")
     os.makedirs(PDF_FOLDER, exist_ok=True)
     
@@ -45,7 +77,21 @@ def handle_file_upload_form(uploaded_files):
         return submitted, group_mode, titles, senders, decisions, project_title, project_sender, project_decision
 
 def _handle_project_mode(uploaded_files):
-    """Handle project grouping mode"""
+    """
+    Manages metadata collection for grouped project submissions with shared information.
+    This function creates an interface for collecting project-level metadata that
+    applies to all files in a multi-document RFP submission. It simplifies the
+    user experience by allowing shared title, sender, and decision information
+    while still providing individual file identification. Essential for processing
+    complex RFPs that consist of multiple related documents from a single client
+    or project, maintaining logical grouping while ensuring proper file tracking.
+    
+    Args:
+        uploaded_files (list): List of files to be processed as a single project
+        
+    Returns:
+        tuple: Project metadata including title, sender, decision, and file lists
+    """
     st.markdown("#### Project-Level Information")
     st.markdown("*This information will apply to all files in the project*")
     col1, col2, col3 = st.columns([2, 2, 1])

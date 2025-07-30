@@ -1,3 +1,20 @@
+"""
+Document Processing Utilities for RFP Analysis System
+
+This module provides comprehensive text extraction capabilities for multiple document
+formats commonly used in RFP submissions. It handles PDF, DOCX, and Excel files with
+robust error handling and fallback mechanisms. The module integrates with OCR
+capabilities for scanned documents and provides a unified interface for extracting
+readable text from various file types.
+
+Key features:
+- Multi-format document support (PDF, DOCX, Excel)
+- OCR integration for scanned documents
+- Structured text extraction from tables and forms
+- MIME type detection for web serving
+- Robust error handling and fallback mechanisms
+"""
+
 import os
 from docx import Document
 import pandas as pd
@@ -5,7 +22,20 @@ import openpyxl
 from ocr_utils import is_scanned, extract_text as extract_pdf_text
 
 def extract_text_from_docx(file_path):
-    """Extract text from DOCX files"""
+    """
+    Extracts comprehensive text content from Microsoft Word DOCX documents.
+    This function processes both paragraph text and table data from Word documents,
+    providing complete text extraction for RFP analysis. It handles document
+    structure by extracting paragraphs sequentially and processing tables with
+    proper cell delimitation. Essential for analyzing Word-based RFP submissions
+    which often contain structured information in both narrative and tabular formats.
+    
+    Args:
+        file_path (str): Full path to the DOCX file to process
+        
+    Returns:
+        str: Extracted text content with paragraphs and table data
+    """
     try:
         doc = Document(file_path)
         text_content = []
@@ -31,7 +61,21 @@ def extract_text_from_docx(file_path):
         return ""
 
 def extract_text_from_excel(file_path):
-    """Extract text from Excel files (xlsx, xls)"""
+    """
+    Extracts structured text content from Excel spreadsheets with multi-sheet support.
+    This function processes Excel files (.xlsx and .xls) by reading all worksheets
+    and converting tabular data into readable text format. It uses openpyxl as the
+    primary extraction method with pandas as fallback for broader compatibility.
+    Particularly useful for RFP submissions that include pricing sheets, vendor
+    information, or technical specifications in spreadsheet format. Maintains
+    sheet structure and cell relationships in the extracted text.
+    
+    Args:
+        file_path (str): Full path to the Excel file to process
+        
+    Returns:
+        str: Extracted text content from all worksheets with sheet labels
+    """
     try:
         # Try reading with openpyxl first (for .xlsx)
         try:
@@ -77,7 +121,20 @@ def extract_text_from_excel(file_path):
         return ""
 
 def get_file_type(filename):
-    """Get the file type based on extension"""
+    """
+    Determines document type from file extension for processing workflow routing.
+    This function analyzes file extensions to categorize documents into supported
+    types (PDF, DOCX, Excel) enabling the system to route files to appropriate
+    text extraction functions. Essential for the document processing pipeline
+    as it determines which extraction method and OCR capabilities to apply.
+    Supports both modern and legacy Excel formats for broader compatibility.
+    
+    Args:
+        filename (str): Name of the file including extension
+        
+    Returns:
+        str: File type identifier ('pdf', 'docx', 'excel', or 'unknown')
+    """
     ext = os.path.splitext(filename)[1].lower()
     if ext == '.pdf':
         return 'pdf'
@@ -89,7 +146,22 @@ def get_file_type(filename):
         return 'unknown'
 
 def extract_text_from_file(file_path, use_ocr=False):
-    """Extract text from any supported file type"""
+    """
+    Universal text extraction function that handles multiple document formats intelligently.
+    This is the main entry point for document text extraction, providing a unified
+    interface that automatically detects file type and applies appropriate extraction
+    methods. For PDFs, it intelligently determines whether OCR is needed for scanned
+    documents. Integrates all specialized extraction functions into a single,
+    easy-to-use interface that handles the complete text extraction workflow
+    with optimal method selection based on document characteristics.
+    
+    Args:
+        file_path (str): Full path to the document file
+        use_ocr (bool): Force OCR usage (mainly for PDF processing)
+        
+    Returns:
+        str: Extracted text content ready for ML analysis
+    """
     file_type = get_file_type(file_path)
     
     if file_type == 'pdf':
@@ -105,7 +177,20 @@ def extract_text_from_file(file_path, use_ocr=False):
         return ""
 
 def get_appropriate_mime_type(filename):
-    """Get appropriate MIME type for file download"""
+    """
+    Determines the correct MIME type for document files to enable proper web serving.
+    This function maps file extensions to their corresponding MIME types, essential
+    for web applications that need to serve documents with correct content headers.
+    Supports the major document formats used in RFP processing and provides a
+    generic fallback for unknown formats. Used primarily for file downloads
+    and web browser compatibility in the Streamlit interface.
+    
+    Args:
+        filename (str): Name of the file including extension
+        
+    Returns:
+        str: Appropriate MIME type string for the file format
+    """
     ext = os.path.splitext(filename)[1].lower()
     mime_types = {
         '.pdf': 'application/pdf',

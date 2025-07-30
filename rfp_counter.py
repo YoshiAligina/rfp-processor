@@ -1,8 +1,37 @@
 # RFP Counter - Utilities for counting unique RFPs
 # Handles the logic for counting projects vs individual files
 
+"""
+RFP Counting Utilities for Database Metrics and Analytics
+
+This module provides specialized counting functions that handle the complexity
+of distinguishing between individual RFP documents and grouped project submissions.
+It ensures accurate metrics by treating multi-file projects as single entities
+while properly counting standalone documents. Essential for dashboard metrics
+and analytics that need to reflect true RFP counts rather than raw file counts.
+
+Key features:
+- Intelligent project vs. individual document detection
+- Unique RFP identification using composite keys
+- Decision-based filtering and counting
+- Consistent metrics across grouped and individual submissions
+"""
+
 def count_unique_rfps(df):
-    """Count unique RFPs, treating project files as single entities"""
+    """
+    Counts unique RFP submissions, properly handling both individual documents and grouped projects.
+    This function analyzes the database to distinguish between standalone RFP documents
+    and multi-file project submissions, ensuring that grouped projects are counted as
+    single entities rather than multiple separate RFPs. It uses intelligent key generation
+    based on document metadata to identify unique submissions across different processing
+    modes, providing accurate metrics for dashboard displays and analytics.
+    
+    Args:
+        df (pandas.DataFrame): RFP database containing all processed documents
+        
+    Returns:
+        int: Count of unique RFP submissions (projects counted as single entities)
+    """
     if df.empty:
         return 0
     
@@ -27,6 +56,21 @@ def count_unique_rfps(df):
     return len(unique_rfps)
 
 def count_unique_rfps_by_decision(df, decision):
-    """Count unique RFPs by decision, treating project files as single entities"""
+    """
+    Counts unique RFP submissions filtered by specific decision status.
+    This function extends the unique counting functionality to provide metrics
+    for specific decision categories (Approved, Denied, Pending). It filters
+    the database by decision status and then applies the same intelligent
+    project grouping logic to ensure accurate counts. Essential for dashboard
+    metrics that show approval rates and decision distribution while maintaining
+    proper distinction between individual documents and project groups.
+    
+    Args:
+        df (pandas.DataFrame): RFP database containing all processed documents
+        decision (str): Decision status to filter by ('Approved', 'Denied', 'Pending')
+        
+    Returns:
+        int: Count of unique RFP submissions with the specified decision status
+    """
     filtered_df = df[df['decision'] == decision]
     return count_unique_rfps(filtered_df)

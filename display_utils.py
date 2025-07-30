@@ -1,5 +1,24 @@
 # Display Utils - Functions for displaying RFP entries and project details
 
+"""
+Display Utilities for RFP Database Management Interface
+
+This module provides comprehensive display functionality for the RFP database interface,
+handling both individual document entries and grouped project displays. It manages
+complex UI interactions including decision updates, file downloads, probability
+recalculations, and detailed document views. The module integrates with data
+management, document processing, and ML prediction systems to provide a complete
+database management experience.
+
+Key features:
+- Project-based grouping for multi-file RFP submissions
+- Individual document entry displays with full interactivity
+- Real-time decision updates with ML model integration
+- File download capabilities with proper MIME type handling
+- Expandable detail views with document summaries
+- Integrated prediction recalculation and model feedback
+"""
+
 import streamlit as st
 import os
 from data_utils import update_decision, delete_entry, update_probability
@@ -9,7 +28,14 @@ from model_utils import predict_document_probability
 PDF_FOLDER = "documents"
 
 def display_project_entry(representative_row, project_files, project_title):
-    """Display a single entry for a grouped project"""
+    """
+    Renders a comprehensive project entry interface for multi-file RFP submissions.
+    This function creates a grouped display for RFP projects consisting of multiple
+    related documents, showing combined project information, individual file details,
+    and interactive controls for project management. It provides expandable details,
+    batch download capabilities, and decision management for the entire project
+    while maintaining access to individual file operations and metadata.
+    """
     # Create a card-like layout
     with st.container():
         col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
@@ -142,7 +168,15 @@ def display_project_entry(representative_row, project_files, project_title):
                         st.rerun()
 
 def display_individual_entry(row):
-    """Display a single entry for an individual file"""
+    """
+    Renders a complete individual document entry interface with full interactivity.
+    This function creates a comprehensive display for standalone RFP documents,
+    providing document information, approval probability, decision controls,
+    file download capabilities, and expandable detail views. It integrates
+    real-time ML prediction updates, decision tracking, and document management
+    features into a cohesive interface that allows users to efficiently review
+    and manage individual RFP submissions with immediate feedback and actions.
+    """
     # Create a card-like layout
     with st.container():
         col1, col2, col3, col4 = st.columns([3, 2, 1, 1])

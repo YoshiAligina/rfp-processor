@@ -34,7 +34,12 @@ else:
     model = LongformerForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=2)
 
 class RFPDataset(Dataset):
-    """Custom dataset for RFP text classification"""
+    """
+    Custom dataset class for RFP text classification using PyTorch Dataset interface.
+    This class handles the tokenization and formatting of RFP documents for training
+    the Longformer model. It converts raw text into tokenized input suitable for
+    transformer models while maintaining the associated classification labels.
+    """
     
     def __init__(self, texts: List[str], labels: List[int], tokenizer, max_length: int = 4096):
         self.texts = texts
@@ -65,7 +70,12 @@ class RFPDataset(Dataset):
         }
 
 def prepare_training_data():
-    """Prepare training data from historical decisions"""
+    """
+    Prepares training data from historical RFP decisions stored in the CSV database.
+    This function loads historical decisions, filters for valid entries with meaningful
+    content, and converts text summaries and decisions into format suitable for model training.
+    Returns paired lists of text content and binary labels (1=Approved, 0=Denied).
+    """
     historical_df = load_historical_decisions()
     
     if len(historical_df) < 2:
@@ -89,7 +99,13 @@ def prepare_training_data():
     return texts, labels
 
 def fine_tune_model(epochs: int = 3, batch_size: int = 2, learning_rate: float = 2e-5):
-    """Fine-tune the Longformer model on RFP data"""
+    """
+    Fine-tunes the Longformer model on historical RFP decision data.
+    This function implements the complete training pipeline including data preparation,
+    model setup, training loop with validation, and model persistence. It adapts the
+    pre-trained Longformer to better understand RFP-specific patterns and decision criteria.
+    Returns True if fine-tuning succeeds and model is saved, False otherwise.
+    """
     global model
     
     print(f"[INFO] Starting fine-tuning process...")
@@ -194,8 +210,16 @@ def fine_tune_model(epochs: int = 3, batch_size: int = 2, learning_rate: float =
     except Exception as e:
         print(f"[ERROR] Failed to save model: {e}")
         return False
-
+# This function is used to chunk text into manageable pieces for processing
+# It ensures that each chunk does not exceed the maximum token limit of the model
 def chunk_text(text, max_tokens=4000, stride=500):
+    """
+    Breaks down large RFP documents into smaller chunks that fit within model token limits.
+    This function uses a sliding window approach with configurable stride to ensure
+    important information isn't lost at chunk boundaries. Each chunk is tokenized,
+    limited to max_tokens, and then decoded back to text for processing.
+    Essential for handling long RFP documents that exceed Longformer's 4096 token limit.
+    """
     tokens = tokenizer.encode(text, add_special_tokens=False)
     print(f"[DEBUG] Total tokens in document: {len(tokens)}")
     chunks = []
@@ -205,8 +229,16 @@ def chunk_text(text, max_tokens=4000, stride=500):
         chunks.append(tokenizer.decode(chunk))
     return chunks
 
+# This function extracts key features from RFP text for similarity comparison
 def extract_rfp_features(text):
-    """Extract key features from RFP text for similarity comparison"""
+    """
+    Extracts key RFP-specific features and patterns from document text for similarity analysis.
+    This function uses regex patterns to identify important RFP elements like budget information,
+    deadlines, project duration, required services, qualifications, and scope of work.
+    It combines these extracted features with general context to create a feature-rich
+    representation used for comparing documents with historical decisions.
+    Returns a concatenated string of relevant features for TF-IDF vectorization.
+    """
     if not text:
         return ""
     
@@ -239,7 +271,13 @@ def extract_rfp_features(text):
     return ' '.join(features)
 
 def load_historical_decisions():
-    """Load historical approved/denied decisions for learning"""
+    """
+    Loads historical RFP decision data from the CSV database for model training and evaluation.
+    This function reads the rfp_db.csv file and filters for entries with actual decisions
+    (either 'Approved' or 'Denied'), excluding any pending or incomplete entries.
+    Returns a pandas DataFrame containing historical decisions with their associated
+    document summaries, which serves as the foundation for model learning and accuracy assessment.
+    """
     csv_db = "rfp_db.csv"
     if not os.path.exists(csv_db):
         return pd.DataFrame()
@@ -252,7 +290,15 @@ def load_historical_decisions():
         return pd.DataFrame()
 
 def calculate_similarity_score(current_text, historical_df):
-    """Calculate similarity between current document and historical decisions"""
+    """
+    Calculates similarity score between current document and historical RFP decisions.
+    This function implements a sophisticated similarity analysis using TF-IDF vectorization
+    and cosine similarity to compare the current document against historically approved
+    and denied RFPs. It extracts features from all documents, computes similarity scores,
+    and returns a probability score indicating how similar the current document is to
+    previously approved versus denied documents. Higher scores indicate greater similarity
+    to approved documents, while lower scores suggest similarity to denied documents.
+    """
     if historical_df.empty:
         return 0.5  # Neutral score if no historical data
     
@@ -330,7 +376,14 @@ def calculate_similarity_score(current_text, historical_df):
         return 0.5
 
 def predict_document_probability(text, auto_finetune=True):
-    """Enhanced prediction combining fine-tuned model with historical learning"""
+    """
+    Generates enhanced probability predictions for RFP documents using hybrid approach.
+    This is the main prediction function that combines fine-tuned Longformer model outputs
+    with historical similarity learning. It automatically triggers fine-tuning when sufficient
+    new data is available, processes documents in chunks to handle long texts, and weights
+    the final prediction based on model confidence and historical pattern matching.
+    Returns a probability score (0-1) where higher values indicate greater likelihood of approval.
+    """
     global model
     
     print(f"[DEBUG] Starting enhanced prediction for document...")
@@ -414,12 +467,246 @@ def predict_document_probability(text, auto_finetune=True):
     return float(final_probability)
 
 def manual_fine_tune():
-    """Manually trigger fine-tuning process"""
+    """
+    Manually triggers the fine-tuning process for the RFP classification model.
+    This function provides an explicit way to initiate model fine-tuning outside
+    of the automatic triggers. Useful for forcing model updates when you want
+    to incorporate new historical data immediately rather than waiting for
+    automatic fine-tuning conditions to be met.
+    """
     print("[INFO] Manual fine-tuning triggered")
     return fine_tune_model()
 
+def evaluate_model_accuracy(threshold=0.5, test_size=0.3, verbose=True):
+    """
+    Comprehensive accuracy evaluation system for the RFP classification model.
+    This function performs rigorous cross-validation testing using historical decisions
+    to assess model performance. It splits data into training/testing sets, generates
+    predictions, and calculates detailed metrics including overall accuracy, precision,
+    recall, F1-scores, confusion matrix, and probability calibration metrics.
+    Provides both quantitative performance measures and detailed prediction breakdowns
+    to help understand model strengths and weaknesses.
+    
+    Args:
+        threshold: Probability threshold for classification (default: 0.5)
+        test_size: Proportion of data to use for testing (default: 0.3)
+        verbose: Whether to print detailed results (default: True)
+    
+    Returns:
+        dict: Dictionary containing accuracy metrics
+    """
+    historical_df = load_historical_decisions()
+    
+    if len(historical_df) < 4:
+        result = {
+            'error': f'Insufficient data for evaluation. Need at least 4 decisions, but only have {len(historical_df)}',
+            'data_count': len(historical_df)
+        }
+        if verbose:
+            print(f"[ERROR] {result['error']}")
+        return result
+    
+    if verbose:
+        print(f"[INFO] Evaluating model accuracy with {len(historical_df)} historical decisions")
+        print(f"[INFO] Using threshold: {threshold}, test size: {test_size}")
+    
+    # Prepare data
+    texts = []
+    true_labels = []
+    
+    for _, row in historical_df.iterrows():
+        summary = row.get('summary', '')
+        if summary and len(summary.strip()) > 20:
+            texts.append(summary)
+            true_labels.append(1 if row['decision'] == 'Approved' else 0)
+    
+    if len(texts) < 4:
+        result = {
+            'error': f'Insufficient valid text data. Need at least 4 summaries, but only have {len(texts)}',
+            'valid_summaries': len(texts)
+        }
+        if verbose:
+            print(f"[ERROR] {result['error']}")
+        return result
+    
+    # Split data for evaluation
+    train_texts, test_texts, train_labels, test_labels = train_test_split(
+        texts, true_labels, test_size=test_size, random_state=42, 
+        stratify=true_labels if len(set(true_labels)) > 1 else None
+    )
+    
+    if verbose:
+        print(f"[INFO] Training set: {len(train_texts)} samples")
+        print(f"[INFO] Test set: {len(test_texts)} samples")
+    
+    # Get predictions on test set
+    predictions = []
+    probabilities = []
+    
+    for text in test_texts:
+        prob = predict_document_probability(text, auto_finetune=False)  # Don't auto-finetune during evaluation
+        probabilities.append(prob)
+        predictions.append(1 if prob > threshold else 0)
+    
+    # Calculate metrics
+    correct = sum(1 for pred, true in zip(predictions, test_labels) if pred == true)
+    total = len(test_labels)
+    accuracy = correct / total if total > 0 else 0
+    
+    # Calculate precision, recall, F1 for each class
+    tp_approved = sum(1 for pred, true in zip(predictions, test_labels) if pred == 1 and true == 1)
+    fp_approved = sum(1 for pred, true in zip(predictions, test_labels) if pred == 1 and true == 0)
+    fn_approved = sum(1 for pred, true in zip(predictions, test_labels) if pred == 0 and true == 1)
+    tn_approved = sum(1 for pred, true in zip(predictions, test_labels) if pred == 0 and true == 0)
+    
+    precision_approved = tp_approved / (tp_approved + fp_approved) if (tp_approved + fp_approved) > 0 else 0
+    recall_approved = tp_approved / (tp_approved + fn_approved) if (tp_approved + fn_approved) > 0 else 0
+    f1_approved = 2 * (precision_approved * recall_approved) / (precision_approved + recall_approved) if (precision_approved + recall_approved) > 0 else 0
+    
+    precision_denied = tn_approved / (tn_approved + fn_approved) if (tn_approved + fn_approved) > 0 else 0
+    recall_denied = tn_approved / (tn_approved + fp_approved) if (tn_approved + fp_approved) > 0 else 0
+    f1_denied = 2 * (precision_denied * recall_denied) / (precision_denied + recall_denied) if (precision_denied + recall_denied) > 0 else 0
+    
+    # Calculate mean absolute error for probability predictions
+    mae = sum(abs(prob - true) for prob, true in zip(probabilities, test_labels)) / len(probabilities)
+    
+    result = {
+        'overall_accuracy': accuracy,
+        'correct_predictions': correct,
+        'total_predictions': total,
+        'threshold_used': threshold,
+        'test_size': test_size,
+        'confusion_matrix': {
+            'true_positive_approved': tp_approved,
+            'false_positive_approved': fp_approved,
+            'false_negative_approved': fn_approved,
+            'true_negative_approved': tn_approved
+        },
+        'approved_metrics': {
+            'precision': precision_approved,
+            'recall': recall_approved,
+            'f1_score': f1_approved
+        },
+        'denied_metrics': {
+            'precision': precision_denied,
+            'recall': recall_denied,
+            'f1_score': f1_denied
+        },
+        'probability_mae': mae,
+        'predictions_vs_actual': list(zip(probabilities, predictions, test_labels))
+    }
+    
+    if verbose:
+        print_accuracy_report(result)
+    
+    return result
+
+def print_accuracy_report(metrics):
+    """
+    Formats and displays a comprehensive accuracy evaluation report to the console.
+    This function takes the metrics dictionary from evaluate_model_accuracy and
+    presents the results in a well-formatted, easy-to-read report including
+    overall accuracy, confusion matrix, per-class performance metrics, and
+    detailed prediction breakdowns. Provides visual indicators for correct/incorrect
+    predictions and organizes information for quick assessment of model performance.
+    """
+    print("\n" + "="*60)
+    print("           RFP MODEL ACCURACY EVALUATION REPORT")
+    print("="*60)
+    
+    if 'error' in metrics:
+        print(f"ERROR: {metrics['error']}")
+        return
+    
+    print(f"Overall Accuracy: {metrics['overall_accuracy']:.2%}")
+    print(f"Correct Predictions: {metrics['correct_predictions']}/{metrics['total_predictions']}")
+    print(f"Threshold Used: {metrics['threshold_used']}")
+    print(f"Probability MAE: {metrics['probability_mae']:.4f}")
+    
+    print("\nCONFUSION MATRIX:")
+    print("                    Predicted")
+    print("                Approved  Denied")
+    print(f"Actual Approved    {metrics['confusion_matrix']['true_positive_approved']:4d}      {metrics['confusion_matrix']['false_negative_approved']:4d}")
+    print(f"       Denied      {metrics['confusion_matrix']['false_positive_approved']:4d}      {metrics['confusion_matrix']['true_negative_approved']:4d}")
+    
+    print("\nPER-CLASS METRICS:")
+    print("Class: APPROVED")
+    print(f"  Precision: {metrics['approved_metrics']['precision']:.2%}")
+    print(f"  Recall:    {metrics['approved_metrics']['recall']:.2%}")
+    print(f"  F1-Score:  {metrics['approved_metrics']['f1_score']:.2%}")
+    
+    print("Class: DENIED")
+    print(f"  Precision: {metrics['denied_metrics']['precision']:.2%}")
+    print(f"  Recall:    {metrics['denied_metrics']['recall']:.2%}")
+    print(f"  F1-Score:  {metrics['denied_metrics']['f1_score']:.2%}")
+    
+    print("\nDETAILED PREDICTIONS:")
+    print("Probability | Predicted | Actual | Correct?")
+    print("-" * 42)
+    for prob, pred, actual in metrics['predictions_vs_actual']:
+        pred_label = "Approved" if pred == 1 else "Denied"
+        actual_label = "Approved" if actual == 1 else "Denied"
+        correct = "✓" if pred == actual else "✗"
+        print(f"   {prob:.3f}    |  {pred_label:8s} | {actual_label:7s} |   {correct}")
+    
+    print("="*60)
+
+def run_accuracy_evaluation():
+    """
+    Executes a comprehensive accuracy evaluation workflow with threshold optimization.
+    This function orchestrates the complete evaluation process by first displaying
+    current model information, then testing multiple probability thresholds to find
+    the optimal one, and finally running a detailed evaluation with the best threshold.
+    It provides a complete assessment of model performance including threshold sensitivity
+    analysis and detailed metrics reporting. This is the main entry point for
+    comprehensive model evaluation from the command line interface.
+    """
+    print("Starting RFP Model Accuracy Evaluation...")
+    
+    # Check model info first
+    model_info = get_model_info()
+    print(f"\nModel Information:")
+    print(f"  Fine-tuned model available: {model_info['has_fine_tuned_model']}")
+    print(f"  Historical decisions: {model_info['historical_decisions']}")
+    print(f"  Approved: {model_info['approved_count']}, Denied: {model_info['denied_count']}")
+    print(f"  Model path: {model_info['model_path']}")
+    
+    # Run evaluation with different thresholds
+    thresholds = [0.3, 0.4, 0.5, 0.6, 0.7]
+    best_accuracy = 0
+    best_threshold = 0.5
+    
+    print(f"\nTesting different probability thresholds...")
+    print("Threshold | Accuracy")
+    print("-" * 20)
+    
+    for threshold in thresholds:
+        result = evaluate_model_accuracy(threshold=threshold, verbose=False)
+        if 'error' not in result:
+            accuracy = result['overall_accuracy']
+            print(f"   {threshold:.1f}    | {accuracy:.2%}")
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                best_threshold = threshold
+        else:
+            print(f"   {threshold:.1f}    | Error: {result['error']}")
+            return
+    
+    print(f"\nBest threshold: {best_threshold} (Accuracy: {best_accuracy:.2%})")
+    
+    # Run detailed evaluation with best threshold
+    print(f"\nRunning detailed evaluation with threshold {best_threshold}...")
+    evaluate_model_accuracy(threshold=best_threshold, verbose=True)
+
 def get_model_info():
-    """Get information about the current model state"""
+    """
+    Retrieves and returns current model state and historical data statistics.
+    This function provides a comprehensive overview of the model's current configuration
+    including whether a fine-tuned model exists, the amount of historical training data,
+    the distribution of approved vs denied decisions, and the model path being used.
+    Essential for understanding model readiness and data availability before running
+    evaluations or making predictions. Used by evaluation tools and diagnostic functions.
+    """
     historical_df = load_historical_decisions()
     has_finetuned = os.path.exists(MODEL_SAVE_PATH)
     

@@ -1,6 +1,22 @@
 # Main RFP Analyzer Application
 # Streamlined main application logic using modular components
 
+"""
+Main RFP Analyzer Application Module
+
+This module contains the core application logic for the RFP (Request for Proposal) 
+processing and analysis system. It orchestrates all the major components including:
+- Document upload and processing workflows
+- Database management and visualization
+- Model training and prediction interfaces
+- User interface coordination and tab management
+
+The application uses Streamlit for the web interface and integrates with various
+specialized modules for document processing, ML predictions, and data management.
+It provides a complete solution for RFP analysis with both batch processing
+capabilities and individual document evaluation features.
+"""
+
 import streamlit as st
 import pandas as pd
 import os
@@ -19,7 +35,14 @@ from upload_handler import handle_file_upload_form, process_uploaded_files
 PDF_FOLDER = "documents"
 
 def render_upload_tab():
-    """Render the Upload & Process tab"""
+    """
+    Renders the main document upload and processing interface tab.
+    This function creates the user interface for uploading multiple document types
+    (PDF, DOCX, Excel) and provides the form controls for batch processing.
+    It handles the complete upload workflow from file selection through processing
+    submission, including validation and user feedback mechanisms.
+    Integrates with upload_handler module for the actual file processing logic.
+    """
     st.markdown("### Upload RFP Documents")
     st.markdown("Upload PDF, Word (DOCX), or Excel files to analyze their potential value..")
     
@@ -43,7 +66,15 @@ def render_upload_tab():
             )
 
 def render_database_tab():
-    """Render the RFP Database tab"""
+    """
+    Renders the comprehensive RFP database management and visualization tab.
+    This function provides the main interface for viewing, filtering, and managing
+    the collection of processed RFP documents. It displays metrics, search controls,
+    model status information, and the complete list of RFP entries with their
+    associated predictions and decisions. Handles both individual document entries
+    and grouped project entries for multi-file RFPs. Integrates with display utilities
+    for consistent entry rendering and provides interactive controls for database operations.
+    """
     st.markdown("### RFP Database Overview")
     df = load_db()
     
@@ -61,7 +92,14 @@ def render_database_tab():
     render_database_entries(df, filter_option, sort_option)
 
 def render_database_metrics(df):
-    """Render the database metrics section"""
+    """
+    Displays key performance metrics and statistics for the RFP database.
+    This function creates a dashboard-style metrics display showing total RFP count,
+    average approval probability, approved count, and provides CSV export functionality.
+    It also displays real-time model status information including fine-tuning state,
+    historical decision counts, and learning mode indicators. Provides users with
+    immediate insight into their RFP processing performance and model readiness.
+    """
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -104,7 +142,16 @@ def render_database_metrics(df):
         st.info(f"⏳ {pending_count} pending RFPs will get more accurate scores as you make more decisions.")
 
 def render_database_controls(df):
-    """Render the database control section"""
+    """
+    Creates interactive control interface for database operations and filtering.
+    This function provides user controls for model operations (rerun predictions,
+    fine-tuning), data filtering (by approval status), and sorting options.
+    It intelligently enables/disables controls based on data availability and
+    model state. The controls allow users to refresh predictions with updated
+    learning, initiate model fine-tuning, and customize the database view
+    according to their analysis needs. Returns filter and sort selections for
+    use in database entry rendering.
+    """
     st.markdown("---")
     
     col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
@@ -142,7 +189,16 @@ def render_database_controls(df):
     return filter_option, sort_option
 
 def handle_model_rerun(df):
-    """Handle the model rerun for all entries"""
+    """
+    Processes model prediction updates for all existing database entries.
+    This function iterates through all RFP entries in the database and regenerates
+    their approval probability scores using the current model state and learned
+    decision patterns. It provides real-time feedback on each update, showing
+    probability changes and handling file access errors gracefully. Essential
+    for refreshing predictions after new historical decisions are added or
+    when the model is fine-tuned, ensuring all entries benefit from improved
+    learning and pattern recognition capabilities.
+    """
     with st.spinner("Rerunning predictions with updated learning..."):
         rerun_count = 0
         for idx, row in df.iterrows():
@@ -168,7 +224,15 @@ def handle_model_rerun(df):
     st.rerun()
 
 def handle_fine_tuning():
-    """Handle the fine-tuning process"""
+    """
+    Manages the model fine-tuning process with comprehensive user interface integration.
+    This function orchestrates the complete fine-tuning workflow, providing visual
+    feedback during the potentially lengthy training process. It calls the manual
+    fine-tuning function from model_utils, handles success/failure states appropriately,
+    and provides guidance to users about next steps after fine-tuning completion.
+    Includes error handling and user notifications to ensure a smooth experience
+    during the model optimization process.
+    """
     with st.spinner("Fine-tuning model on your decisions... This may take a few minutes."):
         try:
             success = manual_fine_tune()
@@ -182,7 +246,16 @@ def handle_fine_tuning():
     st.rerun()
 
 def render_database_entries(df, filter_option, sort_option):
-    """Render the database entries with filtering and sorting"""
+    """
+    Renders the complete database entry listing with advanced filtering and project grouping.
+    This function handles the complex logic of displaying RFP entries, including
+    intelligent grouping of multi-file projects and individual document entries.
+    It applies user-selected filtering and sorting options, manages project
+    deduplication to avoid showing the same project multiple times, and delegates
+    to specialized display functions for consistent entry presentation.
+    The function distinguishes between project-grouped entries and standalone
+    documents, providing an organized and intuitive database view.
+    """
     filtered_df = df.copy()
     if filter_option != "All":
         filtered_df = filtered_df[filtered_df['decision'] == filter_option]
@@ -243,10 +316,19 @@ def render_database_entries(df, filter_option, sort_option):
             display_individual_entry(row)
 
 def main():
-    """Main application entry point"""
+    """
+    Main application entry point and orchestration function.
+    This function initializes the complete Streamlit application, sets up page
+    configuration, applies global styling, and coordinates the rendering of
+    all major application components. It creates the main tab-based interface
+    structure and delegates to specialized rendering functions for each major
+    application section. Serves as the central coordinator for the entire
+    RFP processing application, ensuring proper initialization and component
+    integration for a cohesive user experience.
+    """
     # Page configuration
     st.set_page_config(
-        page_title="RFP Analyzer",
+        page_title="RFPS",
         page_icon="RFP",
         layout="wide"
     )
