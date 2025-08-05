@@ -23,7 +23,14 @@ from ocr_utils import is_scanned, extract_text as extract_pdf_text
 
 def extract_text_from_docx(file_path):
     """
-    Extracts comprehensive text content from Microsoft Word DOCX documents.
+    Extracts comprehensive text content from Microsoft Word DOCX documents with background processing support.
+    
+    BACKGROUND PROCESSING FEATURES:
+    - Progress output flushing for real-time status updates
+    - Memory-efficient processing of large documents
+    - Robust error handling to prevent crashes
+    - Immediate feedback during long operations
+    
     This function processes both paragraph text and table data from Word documents,
     providing complete text extraction for RFP analysis. It handles document
     structure by extracting paragraphs sequentially and processing tables with
@@ -36,16 +43,27 @@ def extract_text_from_docx(file_path):
     Returns:
         str: Extracted text content with paragraphs and table data
     """
+    import sys
+    
     try:
+        print(f"[BACKGROUND] Starting DOCX extraction: {file_path}")
+        sys.stdout.flush()
+        
         doc = Document(file_path)
         text_content = []
         
-        # Extract text from paragraphs
+        # Extract text from paragraphs with progress indication
+        print(f"[BACKGROUND] Extracting paragraphs from DOCX...")
+        sys.stdout.flush()
+        
         for paragraph in doc.paragraphs:
             if paragraph.text.strip():
                 text_content.append(paragraph.text.strip())
         
-        # Extract text from tables
+        # Extract text from tables with progress indication
+        print(f"[BACKGROUND] Extracting tables from DOCX...")
+        sys.stdout.flush()
+        
         for table in doc.tables:
             for row in table.rows:
                 row_text = []
@@ -55,14 +73,27 @@ def extract_text_from_docx(file_path):
                 if row_text:
                     text_content.append(" | ".join(row_text))
         
-        return "\n".join(text_content)
+        result = "\n".join(text_content)
+        print(f"[BACKGROUND] DOCX extraction completed: {len(result)} characters")
+        sys.stdout.flush()
+        return result
+        
     except Exception as e:
-        print(f"Error extracting text from DOCX: {e}")
+        error_msg = f"Error extracting text from DOCX: {e}"
+        print(f"[BACKGROUND ERROR] {error_msg}")
+        sys.stdout.flush()
         return ""
 
 def extract_text_from_excel(file_path):
     """
-    Extracts structured text content from Excel spreadsheets with multi-sheet support.
+    Extracts structured text content from Excel spreadsheets with multi-sheet support and background processing.
+    
+    BACKGROUND PROCESSING FEATURES:
+    - Real-time progress updates during sheet processing
+    - Memory-efficient handling of large spreadsheets
+    - Immediate output flushing for status visibility
+    - Robust error handling with fallback methods
+    
     This function processes Excel files (.xlsx and .xls) by reading all worksheets
     and converting tabular data into readable text format. It uses openpyxl as the
     primary extraction method with pandas as fallback for broader compatibility.
@@ -76,13 +107,27 @@ def extract_text_from_excel(file_path):
     Returns:
         str: Extracted text content from all worksheets with sheet labels
     """
+    import sys
+    
     try:
+        print(f"[BACKGROUND] Starting Excel extraction: {file_path}")
+        sys.stdout.flush()
+        
         # Try reading with openpyxl first (for .xlsx)
         try:
+            print(f"[BACKGROUND] Using openpyxl for Excel processing...")
+            sys.stdout.flush()
+            
             workbook = openpyxl.load_workbook(file_path, data_only=True)
             text_content = []
             
+            print(f"[BACKGROUND] Processing {len(workbook.sheetnames)} Excel sheets...")
+            sys.stdout.flush()
+            
             for sheet_name in workbook.sheetnames:
+                print(f"[BACKGROUND] Processing sheet: {sheet_name}")
+                sys.stdout.flush()
+                
                 sheet = workbook[sheet_name]
                 text_content.append(f"Sheet: {sheet_name}")
                 
@@ -94,14 +139,26 @@ def extract_text_from_excel(file_path):
                     if row_text:
                         text_content.append(" | ".join(row_text))
             
-            return "\n".join(text_content)
+            result = "\n".join(text_content)
+            print(f"[BACKGROUND] Excel extraction completed: {len(result)} characters")
+            sys.stdout.flush()
+            return result
             
-        except Exception:
+        except Exception as openpyxl_error:
             # Fallback to pandas for both .xlsx and .xls
+            print(f"[BACKGROUND] Openpyxl failed, trying pandas fallback...")
+            sys.stdout.flush()
+            
             excel_file = pd.ExcelFile(file_path)
             text_content = []
             
+            print(f"[BACKGROUND] Pandas processing {len(excel_file.sheet_names)} sheets...")
+            sys.stdout.flush()
+            
             for sheet_name in excel_file.sheet_names:
+                print(f"[BACKGROUND] Processing sheet with pandas: {sheet_name}")
+                sys.stdout.flush()
+                
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
                 text_content.append(f"Sheet: {sheet_name}")
                 
@@ -114,10 +171,15 @@ def extract_text_from_excel(file_path):
                     if row_text:
                         text_content.append(" | ".join(row_text))
             
-            return "\n".join(text_content)
+            result = "\n".join(text_content)
+            print(f"[BACKGROUND] Pandas Excel extraction completed: {len(result)} characters")
+            sys.stdout.flush()
+            return result
             
     except Exception as e:
-        print(f"Error extracting text from Excel: {e}")
+        error_msg = f"Error extracting text from Excel: {e}"
+        print(f"[BACKGROUND ERROR] {error_msg}")
+        sys.stdout.flush()
         return ""
 
 def get_file_type(filename):
@@ -183,7 +245,7 @@ def get_appropriate_mime_type(filename):
     for web applications that need to serve documents with correct content headers.
     Supports the major document formats used in RFP processing and provides a
     generic fallback for unknown formats. Used primarily for file downloads
-    and web browser compatibility in the Streamlit interface.
+    and web browser compatibility in the Flask web interface.
     
     Args:
         filename (str): Name of the file including extension

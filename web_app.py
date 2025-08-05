@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 RFP Analyzer Web Application - Flask Version
-Converts the Streamlit RFP processor into a professional HTML web application
+Professional HTML web application for RFP processing and analysis
 """
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from werkzeug.utils import secure_filename
 import os
 import pandas as pd
+import zipfile
+import tempfile
 from datetime import datetime
 import json
 
@@ -165,17 +167,20 @@ def process_project_files(files):
         project_summary = f"🎯 RFP PROJECT: {project_title}\n\nContains {len(processed_files)} files:\n" + "\n".join(file_summaries)
         project_summary += f"\n\nOverall Summary: {generate_document_summary(combined_text, 3)}"
         
-        # Save each file with project information
-        for filename in processed_files:
-            entry = {
-                "filename": filename,
-                "title": f"{project_title} - {filename}",
-                "sender": project_sender,
-                "decision": project_decision,
-                "probability": probability,
-                "summary": project_summary
-            }
-            add_entry_to_db(entry)
+        # Create a single project entry in the database
+        # Use project title as filename for database purposes
+        project_filename = f"PROJECT_{project_title.replace(' ', '_')}" if project_title else f"PROJECT_{processed_files[0]}"
+        
+        entry = {
+            "filename": project_filename,
+            "title": project_title or "Untitled RFP Project",
+            "sender": project_sender or "",
+            "decision": project_decision or "Pending",
+            "probability": probability,
+            "summary": project_summary,
+            "file_list": ", ".join(processed_files)  # Store all project files
+        }
+        add_entry_to_db(entry)
         
         flash(f'Project "{project_title}" processed successfully! Score: {probability:.1%}')
         return redirect(url_for('database'))
@@ -299,24 +304,35 @@ def train_model():
 @app.route('/rerun_model', methods=['POST'])
 def rerun_model():
     """Rerun model predictions for all entries"""
+    print("🔄 [DEBUG] Rerun model endpoint called")
     try:
         df = load_db()
+        print(f"🔄 [DEBUG] Loaded database with {len(df)} entries")
         updated_count = 0
         
         for _, row in df.iterrows():
-            filepath = os.path.join(UPLOAD_FOLDER, row['filename'])
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], row['filename'])
+            print(f"🔄 [DEBUG] Checking file: {filepath}")
             if os.path.exists(filepath):
                 try:
+                    print(f"🔄 [DEBUG] Processing: {row['filename']}")
                     text = extract_text_from_file(filepath)
                     new_prob = predict_document_probability(text)
                     update_probability(row['filename'], new_prob)
                     updated_count += 1
+                    print(f"🔄 [DEBUG] Updated {row['filename']} with probability {new_prob}")
                 except Exception as e:
-                    print(f"Error updating {row['filename']}: {e}")
+                    print(f"❌ [ERROR] Error updating {row['filename']}: {e}")
+            else:
+                print(f"⚠️ [WARNING] File not found: {filepath}")
         
-        flash(f'✅ Updated {updated_count} entries with improved predictions!')
+        message = f'✅ Updated {updated_count} entries with improved predictions!'
+        print(f"🔄 [DEBUG] {message}")
+        flash(message)
     except Exception as e:
-        flash(f'Error during model rerun: {str(e)}')
+        error_msg = f'Error during model rerun: {str(e)}'
+        print(f"❌ [ERROR] {error_msg}")
+        flash(error_msg)
     
     return redirect(url_for('database'))
 
@@ -373,7 +389,7 @@ def api_regenerate_score():
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    """Download an uploaded file"""
+    """Download an uploaded file or create ZIP for project files"""
     try:
         # Verify file exists in database
         df = load_db()
@@ -381,20 +397,77 @@ def download_file(filename):
             flash('File not found in database')
             return redirect(url_for('database'))
         
-        # Secure the filename and check if file exists
-        safe_filename = secure_filename(filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+        # Get the database entry
+        entry = df[df['filename'] == filename].iloc[0]
         
-        if not os.path.exists(file_path):
-            flash('Physical file not found on server')
-            return redirect(url_for('database'))
-        
-        # Send the file for download
-        return send_file(file_path, as_attachment=True, download_name=filename)
+        # Check if this is a project (has file_list)
+        if pd.notna(entry.get('file_list')) and entry['file_list'].strip():
+            # This is a project - create a ZIP file with all project files
+            import zipfile
+            import tempfile
+            from werkzeug.wsgi import FileWrapper
+            
+            project_files = [f.strip() for f in entry['file_list'].split(',')]
+            project_title = entry['title'].replace(' ', '_').replace('/', '_')
+            
+            # Create temporary ZIP file
+            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            
+            with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                files_added = 0
+                for project_file in project_files:
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], project_file.strip())
+                    if os.path.exists(file_path):
+                        zipf.write(file_path, project_file.strip())
+                        files_added += 1
+                
+                if files_added == 0:
+                    flash('No project files found on server')
+                    return redirect(url_for('database'))
+            
+            # Send the ZIP file for download
+            def remove_file(response):
+                try:
+                    os.unlink(temp_zip.name)
+                except Exception:
+                    pass
+                return response
+            
+            return send_file(
+                temp_zip.name, 
+                as_attachment=True, 
+                download_name=f"{project_title}_Project.zip",
+                mimetype='application/zip'
+            )
+        else:
+            # This is a single file - download normally
+            safe_filename = secure_filename(filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+            
+            if not os.path.exists(file_path):
+                flash('Physical file not found on server')
+                return redirect(url_for('database'))
+            
+            # Send the file for download
+            return send_file(file_path, as_attachment=True, download_name=filename)
         
     except Exception as e:
         flash(f'Error downloading file: {str(e)}')
         return redirect(url_for('database'))
 
+@app.route('/admin/consolidate_projects', methods=['POST'])
+def consolidate_projects():
+    """Admin function to consolidate legacy project entries"""
+    try:
+        from consolidate_database import consolidate_legacy_projects
+        consolidate_legacy_projects()
+        flash('✅ Project consolidation completed successfully!')
+    except Exception as e:
+        flash(f'❌ Error during project consolidation: {str(e)}')
+    
+    return redirect(url_for('database'))
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Configure Flask to be less aggressive with file watching
+    # This prevents constant reloads during model processing
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=True, reloader_interval=10)
