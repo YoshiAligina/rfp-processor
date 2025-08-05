@@ -275,20 +275,29 @@ def fine_tune_model(epochs=2, batch_size=1, learning_rate=2e-5):
 
 #### Auto-Training System Integration
 ```python
-def manual_fine_tune():
-    # User-initiated fine-tuning interface
-    # Data validation and balance checking
-    # Simplified training parameters for quick execution
-    # Success/failure feedback with detailed messaging
+def auto_training_check(historical_df, auto_finetune=True):
+    # Progressive training thresholds: 5 entries first, then every 10
+    num_decisions = len(historical_df)
+    has_model = os.path.exists(MODEL_SAVE_PATH)
+    last_trained_count = get_last_training_count()
+    
+    # First training at 5 entries, subsequent training every 10 entries
+    should_train = (not has_model and num_decisions >= 5) or \
+                  (has_model and num_decisions >= last_trained_count + 10)
+    
+    if should_train:
+        fine_tune_model(epochs=2, batch_size=1)
+        save_training_count(num_decisions)
 ```
 
 ## Advanced Features Implementation
 
 ### Auto-Training System
-- **Trigger Conditions:** Manual initiation through UI when 2+ decisions are available
-- **Training Strategy:** Simplified fine-tuning with 2 epochs for quick adaptation
+- **Trigger Conditions:** Automatic training at 5 entries initially, then every 10 entries thereafter
+- **Training Strategy:** Progressive fine-tuning with 2 epochs for optimal learning
 - **Model Updates:** Automatic model reload and improved predictions after training
-- **Data Requirements:** Minimum 2 decisions with at least one approved and one denied
+- **Data Requirements:** Balanced dataset with both approved and denied decisions
+- **Progress Tracking:** Persistent tracking of training milestones to prevent over-training
 
 ### Text Chunking Algorithm
 ```python
@@ -402,7 +411,7 @@ This technical documentation provides a comprehensive overview of the RFP Proces
 ### Installation
 ```bash
 # Clone the repository
-git clone **https://github.com/YoshiAligina/rfp-processor**
+git clone <repository-url>
 cd rfp-processor-main
 
 # Install dependencies
@@ -426,4 +435,3 @@ python run_production.py
 ## Architecture Summary
 
 This system represents a production-ready implementation of transformer-based document analysis with a professional Flask web interface. The hybrid approach combining Longformer neural networks with TF-IDF similarity learning provides robust performance across diverse RFP types. The system features comprehensive document processing, intelligent fine-tuning triggers, and modular architecture designed for maintainability and extensibility.
-

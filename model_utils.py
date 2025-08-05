@@ -23,7 +23,28 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 
 MODEL_NAME = "allenai/longformer-base-4096"
 MODEL_SAVE_PATH = "fine_tuned_longformer"
+TRAINING_TRACKER_FILE = "training_tracker.txt"  # Track last training count
 tokenizer = LongformerTokenizer.from_pretrained(MODEL_NAME)
+
+# Training tracking functions
+def get_last_training_count():
+    """Get the number of entries when we last performed training."""
+    if os.path.exists(TRAINING_TRACKER_FILE):
+        try:
+            with open(TRAINING_TRACKER_FILE, 'r') as f:
+                return int(f.read().strip())
+        except (ValueError, FileNotFoundError):
+            return 0
+    return 0
+
+def save_training_count(count):
+    """Save the current entry count after training."""
+    try:
+        with open(TRAINING_TRACKER_FILE, 'w') as f:
+            f.write(str(count))
+        print(f"📊 [TRACKING] Saved training count: {count} entries")
+    except Exception as e:
+        print(f"⚠️ [TRACKING] Failed to save training count: {e}")
 
 # Try to load fine-tuned model first, fallback to base model
 if os.path.exists(MODEL_SAVE_PATH):
@@ -522,20 +543,32 @@ def predict_document_probability(text, auto_finetune=True):
     
     print(f"[DEBUG] Starting enhanced prediction for document...")
     
-    # SIMPLIFIED: Check if we should auto-train (less complex conditions)
+    # Auto-training with progressive thresholds: 5 entries first, then every 10
     if auto_finetune:
         historical_df = load_historical_decisions()
         num_decisions = len(historical_df)
         has_model = os.path.exists(MODEL_SAVE_PATH)
         
-        # Simple rule: Auto-train every 5 new decisions, or if we have 3+ and no custom model
-        should_train = (num_decisions >= 3 and not has_model) or (num_decisions > 0 and num_decisions % 5 == 0)
+        should_train = False
+        
+        # Get last training count from tracking file
+        last_trained_count = get_last_training_count()
+        
+        if not has_model and num_decisions >= 5:
+            # First training at 5 entries
+            should_train = True
+            print(f"🎯 [AUTO-TRAIN] First training trigger at {num_decisions} entries")
+        elif has_model and num_decisions >= last_trained_count + 10:
+            # Subsequent training every 10 entries
+            should_train = True
+            print(f"🔄 [AUTO-TRAIN] Progressive training trigger: {num_decisions} total entries ({num_decisions - last_trained_count} since last training)")
         
         if should_train:
-            print(f"🤖 [AUTO-TRAIN] Triggering automatic training with {num_decisions} decisions")
-            fine_tune_success = fine_tune_model(epochs=1, batch_size=1)  # Quick training
+            print(f"🤖 [AUTO-TRAIN] Starting automatic fine-tuning...")
+            fine_tune_success = fine_tune_model(epochs=2, batch_size=1)  # 2 epochs for better learning
             if fine_tune_success:
                 model = LongformerForSequenceClassification.from_pretrained(MODEL_SAVE_PATH)
+                save_training_count(num_decisions)  # Track when we last trained
                 print("✅ [AUTO-TRAIN] Model updated successfully")
     
     # Get base model prediction
@@ -635,6 +668,7 @@ def manual_fine_tune():
     success = fine_tune_model(epochs=2, batch_size=1)  # Simplified parameters
     
     if success:
+        save_training_count(total_decisions)  # Track manual training
         print(f"🎉 [SUCCESS] Model training completed!")
         print(f"💡 [NEXT STEPS] Your model is now personalized to your decisions.")
         print(f"🔄 [SUGGESTION] Consider running 'Rerun Model' to update existing predictions.")
