@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}RFP Database - RFP Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">
+            <i class="fas fa-database me-2"></i>RFP Database
+        </h2>
+        
+        <!-- Filters and Controls -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="GET" class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="filter" class="form-label">Filter by Status</label>
+                        <select name="filter" id="filter" class="form-select" onchange="this.form.submit()">
+                            <option value="All" {% if filter_status == 'All' %}selected{% endif %}>All</option>
+                            <option value="Pending" {% if filter_status == 'Pending' %}selected{% endif %}>Pending</option>
+                            <option value="Approved" {% if filter_status == 'Approved' %}selected{% endif %}>Approved</option>
+                            <option value="Denied" {% if filter_status == 'Denied' %}selected{% endif %}>Denied</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="sort" class="form-label">Sort by</label>
+                        <select name="sort" id="sort" class="form-select" onchange="this.form.submit()">
+                            <option value="Score (High to Low)" {% if sort_by == 'Score (High to Low)' %}selected{% endif %}>Score (High to Low)</option>
+                            <option value="Score (Low to High)" {% if sort_by == 'Score (Low to High)' %}selected{% endif %}>Score (Low to High)</option>
+                            <option value="Title" {% if sort_by == 'Title' %}selected{% endif %}>Title</option>
+                            <option value="Date Added" {% if sort_by == 'Date Added' %}selected{% endif %}>Date Added</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <form method="POST" action="{{ url_for('rerun_model') }}" class="d-inline">
+                            <button type="submit" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-sync me-1"></i>Rerun Model for All
+                            </button>
+                        </form>
+                        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Add New RFP
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if entries %}
+        <!-- Entries List -->
+        <div class="row">
+            {% for entry in entries %}
+            <div class="col-12 mb-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">{{ entry.title }}</h5>
+                            <small class="text-muted">
+                                {% if entry.file_list %}
+                                    <i class="fas fa-folder me-1"></i>{{ entry.filename }}
+                                    <br><i class="fas fa-files ms-0 me-1"></i>Contains: {{ entry.file_list }}
+                                {% else %}
+                                    <i class="fas fa-file me-1"></i>{{ entry.filename }}
+                                {% endif %}
+                                <br><i class="fas fa-building me-1"></i>{{ entry.sender }}
+                            </small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <!-- Score Display -->
+                            <div class="me-3 text-center">
+                                <div class="h4 mb-0 
+                                    {% if entry.probability >= 0.7 %}text-success
+                                    {% elif entry.probability >= 0.4 %}text-warning
+                                    {% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(entry.probability * 100) }}%
+                                </div>
+                                <small class="text-muted">Score</small>
+                            </div>
+                            
+                            <!-- Status Badge -->
+                            <span class="status-badge status-{{ entry.decision.lower() }} me-3">
+                                {{ entry.decision }}
+                            </span>
+                            
+                            <!-- Actions Dropdown -->
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                        type="button" data-bs-toggle="dropdown"
+                                        title="Actions for {{ entry.filename }}">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a href="{{ url_for('edit_entry_page', filename=entry.filename) }}" 
+                                           class="dropdown-item">
+                                            <i class="fas fa-edit me-2"></i>Edit Entry
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ url_for('download_file', filename=entry.filename) }}" 
+                                           class="dropdown-item">
+                                            <i class="fas fa-download me-2"></i>Download File
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('update_decision_route') }}" class="d-inline">
+                                            <input type="hidden" name="filename" value="{{ entry.filename }}">
+                                            <input type="hidden" name="decision" value="Approved">
+                                            <button type="submit" class="dropdown-item text-success">
+                                                <i class="fas fa-check me-2"></i>Mark as Approved
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('update_decision_route') }}" class="d-inline">
+                                            <input type="hidden" name="filename" value="{{ entry.filename }}">
+                                            <input type="hidden" name="decision" value="Denied">
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="fas fa-times me-2"></i>Mark as Denied
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('update_decision_route') }}" class="d-inline">
+                                            <input type="hidden" name="filename" value="{{ entry.filename }}">
+                                            <input type="hidden" name="decision" value="Pending">
+                                            <button type="submit" class="dropdown-item text-warning">
+                                                <i class="fas fa-clock me-2"></i>Mark as Pending
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('delete_entry_route', filename=entry.filename) }}" 
+                                              class="d-inline delete-form">
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="fas fa-trash me-2"></i>Delete Entry
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Score Progress Bar -->
+                        <div class="progress mb-3" style="height: 8px;">
+                            <div class="progress-bar 
+                                {% if entry.probability >= 0.7 %}bg-success
+                                {% elif entry.probability >= 0.4 %}bg-warning
+                                {% else %}bg-danger{% endif %}" 
+                                 style="width: {{ (entry.probability * 100)|round }}%">
+                            </div>
+                        </div>
+                        
+                        <!-- Summary -->
+                        <div class="summary-text">
+                            {{ entry.summary|truncate(500) }}
+                            {% if entry.summary|length > 500 %}
+                            <button class="btn btn-link btn-sm p-0" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#summary-{{ loop.index }}"
+                                    aria-expanded="false">
+                                Read more...
+                            </button>
+                            <div class="collapse mt-2" id="summary-{{ loop.index }}">
+                                <div class="card card-body bg-light">
+                                    {{ entry.summary[500:] }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-5">
+            <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+            <h4>No RFPs Found</h4>
+            <p class="text-muted">Start by uploading some RFP documents to analyze.</p>
+            <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                <i class="fas fa-upload me-2"></i>Upload Your First RFP
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Confirm action for destructive operations
+document.querySelectorAll('form').forEach(form => {
+    if (form.action.includes('update_decision')) {
+        form.addEventListener('submit', function(e) {
+            const decision = form.querySelector('input[name="decision"]').value;
+            const filename = form.querySelector('input[name="filename"]').value;
+            
+            if (!confirm(`Are you sure you want to mark "${filename}" as ${decision}?`)) {
+                e.preventDefault();
+            }
+        });
+    }
+});
+
+// Confirm deletion
+document.querySelectorAll('.delete-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        const filename = this.action.split('/').pop(); // Extract filename from URL
+        
+        if (!confirm(`⚠️ Are you sure you want to DELETE "${filename}"?\n\nThis action cannot be undone. The file and all associated data will be permanently removed.`)) {
+            e.preventDefault();
+        }
+    });
+});
+
+// Auto-submit filters with debounce
+let filterTimeout;
+document.querySelectorAll('#filter, #sort').forEach(select => {
+    select.addEventListener('change', function() {
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(() => {
+            this.form.submit();
+        }, 100);
+    });
+});
+</script>
+{% endblock %}

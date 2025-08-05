@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}RFP Analyzer - Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Main Dashboard -->
+    <div class="col-lg-8">
+        <h2 class="mb-4">
+            <i class="fas fa-chart-line me-2"></i>RFP Processing Dashboard
+        </h2>
+        
+        <!-- Metrics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value">{{ total_rfps }}</div>
+                    <div class="metric-label">Total RFPs</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value">{{ "%.1f"|format(avg_score * 100) }}%</div>
+                    <div class="metric-label">Avg Score</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value text-success">{{ approved_count }}</div>
+                    <div class="metric-label">Approved</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value text-warning">{{ pending_count }}</div>
+                    <div class="metric-label">Pending</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Model Status -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-brain me-2"></i>AI Model Status</h5>
+            </div>
+            <div class="card-body">
+                {% if model_info.has_fine_tuned_model %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Fine-tuned Model Active</strong><br>
+                        Trained on {{ model_info.approved_count }} approved and {{ model_info.denied_count }} denied RFPs. 
+                        Model predictions are optimized for your decision patterns!
+                    </div>
+                {% elif model_info.approved_count + model_info.denied_count > 0 %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Learning Mode</strong><br>
+                        Using similarity learning from {{ model_info.approved_count }} approved and {{ model_info.denied_count }} denied RFPs. 
+                        Consider fine-tuning for better accuracy!
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Initial Mode</strong><br>
+                        No historical decisions yet. Start approving/denying RFPs to improve prediction accuracy!
+                    </div>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <form method="POST" action="{{ url_for('train_model') }}" class="d-inline">
+                        {% if model_info.historical_decisions >= 2 %}
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-brain me-1"></i>Fine-tune Model
+                            </button>
+                        {% else %}
+                            <button type="button" class="btn btn-primary me-2" disabled 
+                                    title="Need at least 2 decisions to fine-tune">
+                                <i class="fas fa-brain me-1"></i>Fine-tune Model
+                            </button>
+                        {% endif %}
+                    </form>
+                    
+                    <form method="POST" action="{{ url_for('rerun_model') }}" class="d-inline">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-sync me-1"></i>Rerun Model for All Entries
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Entries -->
+        {% if recent_entries %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent RFP Entries</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Sender</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in recent_entries %}
+                            <tr>
+                                <td>
+                                    <strong>{{ entry.title }}</strong><br>
+                                    <small class="text-muted">{{ entry.filename }}</small>
+                                </td>
+                                <td>{{ entry.sender }}</td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar 
+                                            {% if entry.probability >= 0.7 %}bg-success
+                                            {% elif entry.probability >= 0.4 %}bg-warning
+                                            {% else %}bg-danger{% endif %}" 
+                                             style="width: {{ (entry.probability * 100)|round }}%">
+                                            {{ "%.1f"|format(entry.probability * 100) }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-{{ entry.decision.lower() }}">
+                                        {{ entry.decision }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('database') }}" class="btn btn-outline-primary">
+                        View All Entries <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="sidebar">
+            <h5><i class="fas fa-rocket me-2"></i>Quick Actions</h5>
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                    <i class="fas fa-upload me-2"></i>Upload New RFPs
+                </a>
+                <a href="{{ url_for('database') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-database me-2"></i>View Database
+                </a>
+            </div>
+            
+            <hr class="my-4">
+            
+            <h6><i class="fas fa-info-circle me-2"></i>System Information</h6>
+            <ul class="list-unstyled small">
+                <li><strong>Model Type:</strong> 
+                    {% if model_info.has_fine_tuned_model %}Fine-tuned{% else %}Base{% endif %}
+                </li>
+                <li><strong>Historical Decisions:</strong> {{ model_info.historical_decisions }}</li>
+                <li><strong>Approved:</strong> {{ model_info.approved_count }}</li>
+                <li><strong>Denied:</strong> {{ model_info.denied_count }}</li>
+            </ul>
+            
+            <hr class="my-4">
+            
+            <h6><i class="fas fa-lightbulb me-2"></i>Tips</h6>
+            <ul class="list-unstyled small text-muted">
+                <li>• Upload multiple RFPs to build training data</li>
+                <li>• Make approve/deny decisions to improve accuracy</li>
+                <li>• Fine-tune the model after 2+ decisions</li>
+                <li>• Group related files as projects for better analysis</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh stats every 30 seconds
+setInterval(function() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update metrics if needed
+        });
+}, 30000);
+</script>
+{% endblock %}

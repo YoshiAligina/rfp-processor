@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Upload RFPs - RFP Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <h2 class="mb-4">
+            <i class="fas fa-upload me-2"></i>Upload RFP Documents
+        </h2>
+        <p class="text-muted">Upload PDF, Word (DOCX), or Excel files to analyze their potential value.</p>
+        
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            <!-- Processing Mode Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Processing Mode</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="processing_mode" 
+                                       id="individual" value="individual" checked>
+                                <label class="form-check-label" for="individual">
+                                    <strong>Individual Processing</strong><br>
+                                    <small class="text-muted">Each file analyzed separately</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="processing_mode" 
+                                       id="project" value="project">
+                                <label class="form-check-label" for="project">
+                                    <strong>Project Mode</strong><br>
+                                    <small class="text-muted">Combine files as one RFP project</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- File Upload Area -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-upload me-2"></i>Select Files</h5>
+                </div>
+                <div class="card-body">
+                    <div class="file-upload-area" id="fileUploadArea">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <h5>Drag & Drop Files Here</h5>
+                        <p class="text-muted">or click to browse</p>
+                        <input type="file" name="files" id="fileInput" multiple 
+                               accept=".pdf,.docx,.xlsx,.xls" class="d-none">
+                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">
+                            <i class="fas fa-folder-open me-2"></i>Browse Files
+                        </button>
+                    </div>
+                    <div id="fileList" class="mt-3"></div>
+                </div>
+            </div>
+            
+            <!-- Project Information (shown when project mode is selected) -->
+            <div class="card mb-4" id="projectInfo" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Project Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="project_title" class="form-label">Project Title *</label>
+                                <input type="text" class="form-control" name="project_title" 
+                                       placeholder="e.g., Hospital Lab Services RFP 2025">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="project_sender" class="form-label">Client/Organization *</label>
+                                <input type="text" class="form-control" name="project_sender" 
+                                       placeholder="e.g., City Hospital System">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="project_decision" class="form-label">Initial Status</label>
+                                <select class="form-select" name="project_decision">
+                                    <option value="Pending">Pending</option>
+                                    <option value="Approved">Approved</option>
+                                    <option value="Denied">Denied</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Individual File Information (shown when individual mode is selected) -->
+            <div class="card mb-4" id="individualInfo">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>File Information</h5>
+                </div>
+                <div class="card-body">
+                    <div id="fileInfoForms">
+                        <p class="text-muted">Select files first to configure individual settings.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                    <i class="fas fa-magic me-2"></i>Process Documents
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="sidebar">
+            <h5><i class="fas fa-info-circle me-2"></i>Upload Guidelines</h5>
+            
+            <h6 class="mt-3">Supported File Types</h6>
+            <ul class="list-unstyled">
+                <li><i class="fas fa-file-pdf text-danger me-2"></i>PDF Documents</li>
+                <li><i class="fas fa-file-word text-primary me-2"></i>Word Documents (.docx)</li>
+                <li><i class="fas fa-file-excel text-success me-2"></i>Excel Spreadsheets (.xlsx, .xls)</li>
+            </ul>
+            
+            <h6 class="mt-3">Processing Modes</h6>
+            <ul class="list-unstyled small">
+                <li><strong>Individual:</strong> Each file analyzed separately with its own score</li>
+                <li><strong>Project:</strong> All files combined into ONE database entry as a single RFP project</li>
+            </ul>
+            
+            <h6 class="mt-3">Tips</h6>
+            <ul class="list-unstyled small text-muted">
+                <li>• Maximum file size: 50MB</li>
+                <li>• OCR applied automatically to scanned PDFs</li>
+                <li>• Use project mode for multi-part RFPs (proposal + budget + timeline)</li>
+                <li>• Project mode: 3 files = 1 database entry</li>
+                <li>• Individual mode: 3 files = 3 database entries</li>
+                <li>• Provide clear titles and sender information</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('fileInput');
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileList = document.getElementById('fileList');
+    const submitBtn = document.getElementById('submitBtn');
+    const individualRadio = document.getElementById('individual');
+    const projectRadio = document.getElementById('project');
+    const projectInfo = document.getElementById('projectInfo');
+    const individualInfo = document.getElementById('individualInfo');
+    const fileInfoForms = document.getElementById('fileInfoForms');
+    
+    let selectedFiles = [];
+    
+    // Processing mode change
+    function updateProcessingMode() {
+        if (projectRadio.checked) {
+            projectInfo.style.display = 'block';
+            individualInfo.style.display = 'none';
+        } else {
+            projectInfo.style.display = 'none';
+            individualInfo.style.display = 'block';
+        }
+    }
+    
+    individualRadio.addEventListener('change', updateProcessingMode);
+    projectRadio.addEventListener('change', updateProcessingMode);
+    
+    // File upload handling
+    fileUploadArea.addEventListener('click', () => fileInput.click());
+    
+    fileUploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        fileUploadArea.classList.add('dragover');
+    });
+    
+    fileUploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        fileUploadArea.classList.remove('dragover');
+    });
+    
+    fileUploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        fileUploadArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+    
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(e.target.files);
+    });
+    
+    function handleFiles(files) {
+        selectedFiles = Array.from(files);
+        displayFileList();
+        updateSubmitButton();
+        
+        if (individualRadio.checked) {
+            generateIndividualForms();
+        }
+    }
+    
+    function displayFileList() {
+        if (selectedFiles.length === 0) {
+            fileList.innerHTML = '';
+            return;
+        }
+        
+        let html = '<h6>Selected Files:</h6><ul class="list-group">';
+        selectedFiles.forEach((file, index) => {
+            const icon = getFileIcon(file.name);
+            const size = (file.size / 1024 / 1024).toFixed(2);
+            html += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="${icon} me-2"></i>
+                        ${file.name}
+                        <small class="text-muted d-block">${size} MB</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </li>
+            `;
+        });
+        html += '</ul>';
+        fileList.innerHTML = html;
+    }
+    
+    function generateIndividualForms() {
+        if (selectedFiles.length === 0) {
+            fileInfoForms.innerHTML = '<p class="text-muted">Select files first to configure individual settings.</p>';
+            return;
+        }
+        
+        let html = '';
+        selectedFiles.forEach((file, index) => {
+            const baseName = file.name.replace(/\.[^/.]+$/, "");
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="${getFileIcon(file.name)} me-2"></i>${file.name}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Title</label>
+                                    <input type="text" class="form-control" name="title_${file.name}" value="${baseName}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Sender/Organization</label>
+                                    <input type="text" class="form-control" name="sender_${file.name}" placeholder="Required">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="decision_${file.name}">
+                                        <option value="Pending">Pending</option>
+                                        <option value="Approved">Approved</option>
+                                        <option value="Denied">Denied</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        fileInfoForms.innerHTML = html;
+    }
+    
+    function getFileIcon(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        switch(ext) {
+            case 'pdf': return 'fas fa-file-pdf text-danger';
+            case 'docx': return 'fas fa-file-word text-primary';
+            case 'xlsx': case 'xls': return 'fas fa-file-excel text-success';
+            default: return 'fas fa-file text-muted';
+        }
+    }
+    
+    function updateSubmitButton() {
+        submitBtn.disabled = selectedFiles.length === 0;
+    }
+    
+    // Make removeFile function global
+    window.removeFile = function(index) {
+        selectedFiles.splice(index, 1);
+        displayFileList();
+        updateSubmitButton();
+        
+        if (individualRadio.checked) {
+            generateIndividualForms();
+        }
+    };
+});
+</script>
+{% endblock %}

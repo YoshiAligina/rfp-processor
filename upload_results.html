@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Results - RFP Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">
+            <i class="fas fa-check-circle me-2"></i>Upload Results
+        </h2>
+        
+        <div class="row">
+            {% for result in results %}
+            <div class="col-md-6 mb-4">
+                <div class="card {% if result.success %}border-success{% else %}border-danger{% endif %}">
+                    <div class="card-header {% if result.success %}bg-success text-white{% else %}bg-danger text-white{% endif %}">
+                        <h6 class="mb-0">
+                            <i class="fas {% if result.success %}fa-check{% else %}fa-times{% endif %} me-2"></i>
+                            {{ result.filename }}
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% if result.success %}
+                            <div class="text-center mb-3">
+                                <div class="h2 {% if result.probability >= 0.7 %}text-success{% elif result.probability >= 0.4 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(result.probability * 100) }}%
+                                </div>
+                                <small class="text-muted">Approval Probability</small>
+                            </div>
+                            <div class="progress mb-3">
+                                <div class="progress-bar {% if result.probability >= 0.7 %}bg-success{% elif result.probability >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     style="width: {{ (result.probability * 100)|round }}%">
+                                </div>
+                            </div>
+                        {% endif %}
+                        <p class="mb-0">{{ result.message }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('database') }}" class="btn btn-primary me-2">
+                <i class="fas fa-database me-1"></i>View Database
+            </a>
+            <a href="{{ url_for('upload_page') }}" class="btn btn-outline-primary">
+                <i class="fas fa-upload me-1"></i>Upload More Files
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
