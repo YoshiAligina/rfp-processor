@@ -120,7 +120,7 @@ def _handle_project_mode(uploaded_files):
     # Only show file listing if project info is provided
     if project_title and project_sender:
         st.markdown("#### Files in this Project")
-        st.markdown("*All files will be analyzed together and receive the same overall score and status*")
+        st.markdown("*All files will be analyzed together as ONE project entry with a combined score and status*")
         
         # Show file listing with file types
         files_info = []
@@ -140,6 +140,8 @@ def _handle_project_mode(uploaded_files):
         for i, file_info in enumerate(files_info):
             with cols[i % 2]:
                 st.markdown(f"{i+1}. {file_info}")
+        
+        st.info(f"💡 **Project Mode**: These {len(uploaded_files)} files will create 1 database entry instead of {len(uploaded_files)} separate entries")
         
         # Prepare data for all files using project information
         titles, senders, decisions = [], [], []
@@ -343,17 +345,17 @@ def _process_as_project(uploaded_files, titles, senders, decisions,
     # Create comprehensive project summary
     project_summary = _create_project_summary(project_title, uploaded_files, file_summaries, combined_text, total_word_count)
     
-    # Save each file with unified project information
-    for idx, uploaded_file in enumerate(uploaded_files):
-        entry = {
-            "filename": uploaded_file.name,
-            "title": titles[idx],
-            "sender": senders[idx], 
-            "decision": decisions[idx],
-            "probability": prob,  # Unified probability for all files in project
-            "summary": project_summary  # Comprehensive project summary for all files
-        }
-        add_entry_to_db(entry)
+    # Save as SINGLE project entry instead of individual file entries
+    project_entry = {
+        "filename": f"{project_title} ({len(uploaded_files)} files)",  # Show project name with file count
+        "title": project_title,
+        "sender": project_sender, 
+        "decision": project_decision,
+        "probability": prob,  # Unified probability for the entire project
+        "summary": project_summary,  # Comprehensive project summary covering all files
+        "file_list": ", ".join([f.name for f in uploaded_files])  # Store list of included files
+    }
+    add_entry_to_db(project_entry)
     
     progress_bar.progress(1.0)
     status_text.text("RFP project processed successfully!")
@@ -364,7 +366,8 @@ def _process_as_project(uploaded_files, titles, senders, decisions,
     **Project:** {project_title}  
     **Client:** {project_sender}  
     **Status:** {project_decision}  
-    **Files Processed:** {len(uploaded_files)}  
+    **Files Processed:** {len(uploaded_files)} files combined into 1 project entry
+    **Files:** {", ".join([f.name for f in uploaded_files])}
     **Combined AI Score:** {prob:.1%}
     """)
     

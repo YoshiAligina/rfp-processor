@@ -20,7 +20,7 @@ import os
 
 # Database configuration constants
 CSV_DB = "rfp_db.csv" 
-CSV_COLUMNS = ["filename", "title", "sender", "decision", "probability", "summary"]
+CSV_COLUMNS = ["filename", "title", "sender", "decision", "probability", "summary", "file_list"]
 
 def load_db():
     """
