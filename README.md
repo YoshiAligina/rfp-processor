@@ -1,7 +1,7 @@
 
 ## Overview
 
-The RFP Processor  analyzes Request for Proposal (RFP) documents to predict their potential value and relevance. It uses a combination of machine learning models, historical decision learning, and document processing techniques to provide intelligent insights.
+The RFP Processor  analyzes Request for Proposal (RFP) documents to predict their potential value and relevance. It uses a combination of machine learning models, historical decision learning, and document processing techniques to provide intelligent insights. This was made FOR QUEST DIAGNOSTICS CLIFTON when I was an intern. I was granted permisson to upload this to GitHub with company data scrubbed. 
 
 ## Complete Processing Workflow
 
@@ -237,3 +237,4 @@ rfp-processor/
 - Memory issues: Automatic text chunking
 
 This comprehensive workflow ensures reliable, intelligent, and continuously improving RFP analysis that adapts to your specific decision patterns and requirements.
+
