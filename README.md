@@ -402,7 +402,7 @@ This technical documentation provides a comprehensive overview of the RFP Proces
 ### Installation
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone **https://github.com/YoshiAligina/rfp-processor**
 cd rfp-processor-main
 
 # Install dependencies
@@ -426,3 +426,4 @@ python run_production.py
 ## Architecture Summary
 
 This system represents a production-ready implementation of transformer-based document analysis with a professional Flask web interface. The hybrid approach combining Longformer neural networks with TF-IDF similarity learning provides robust performance across diverse RFP types. The system features comprehensive document processing, intelligent fine-tuning triggers, and modular architecture designed for maintainability and extensibility.
+
