@@ -265,28 +265,41 @@ def process_uploaded_files(uploaded_files, group_mode, titles, senders, decision
 def _process_as_project(uploaded_files, titles, senders, decisions, 
                        project_title, project_sender, project_decision, 
                        progress_bar, status_text):
-    """Process files as a single RFP project"""
-    st.info(f"Processing {len(uploaded_files)} files as one RFP project: '{project_title}'")
+    """
+    Process files as a single RFP project with intelligent document combination.
+    This function treats multiple files as components of one cohesive RFP,
+    combining their content strategically for unified analysis while maintaining
+    individual file tracking for reference purposes.
+    """
+    st.info(f"🔗 Processing {len(uploaded_files)} files as unified RFP project: '{project_title}'")
     
-    # Combine all text from files for analysis
-    combined_text = ""
+    # Enhanced document combination with structured approach
+    combined_sections = {
+        'executive_summary': [],
+        'technical_specs': [],
+        'financial_info': [],
+        'general_content': []
+    }
+    
     file_summaries = []
+    total_word_count = 0
     
     for idx, uploaded_file in enumerate(uploaded_files):
         progress = (idx + 0.5) / len(uploaded_files)
         progress_bar.progress(progress)
-        status_text.text(f"Extracting text from {uploaded_file.name}... ({idx + 1}/{len(uploaded_files)})")
+        status_text.text(f"📄 Processing {uploaded_file.name}... ({idx + 1}/{len(uploaded_files)})")
         
         file_path = os.path.join(PDF_FOLDER, uploaded_file.name)
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
         try:
+            # Extract text based on file type
             file_type = get_file_type(uploaded_file.name)
             
             if file_type == 'pdf':
                 if is_scanned(file_path):
-                    st.info(f"Applying OCR to scanned PDF: {uploaded_file.name}")
+                    st.info(f"🔍 Applying OCR to scanned PDF: {uploaded_file.name}")
                     text = extract_text(file_path, use_easyocr=True)
                 else:
                     text = extract_text(file_path)
@@ -295,38 +308,50 @@ def _process_as_project(uploaded_files, titles, senders, decisions,
             elif file_type == 'excel':
                 text = extract_text_from_file(file_path)
             else:
-                st.warning(f"Unsupported file type: {uploaded_file.name}")
+                st.warning(f"⚠️ Unsupported file type: {uploaded_file.name}")
                 continue
             
-            if text:
-                combined_text += f"\n\n--- Content from {uploaded_file.name} ---\n" + text
-                file_summaries.append(f"📄 {uploaded_file.name}: {generate_document_summary(text, 1)}")
+            if text and text.strip():
+                # Categorize content based on filename and content patterns
+                file_category = _categorize_document_content(uploaded_file.name, text)
+                combined_sections[file_category].append({
+                    'filename': uploaded_file.name,
+                    'content': text,
+                    'word_count': len(text.split())
+                })
+                
+                total_word_count += len(text.split())
+                file_summaries.append(f"📄 {uploaded_file.name} ({file_category}): {generate_document_summary(text, 1)}")
+                st.success(f"✅ Processed {uploaded_file.name} - {len(text.split())} words")
+            else:
+                st.warning(f"⚠️ No readable text found in {uploaded_file.name}")
                 
         except Exception as e:
-            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
+            st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
             continue
     
-    # Run AI analysis on combined text
-    status_text.text(f"Running AI analysis on combined RFP project...")
+    # Create intelligently structured combined text
+    combined_text = _create_structured_combination(combined_sections, project_title)
+    
+    # Run AI analysis on intelligently combined text
+    status_text.text(f"🤖 Running AI analysis on unified project ({total_word_count:,} words)...")
     progress_bar.progress(0.8)
     
-    with st.spinner(f"Analyzing complete RFP project: '{project_title}'..."):
+    with st.spinner(f"🔍 Analyzing complete RFP project: '{project_title}'..."):
         prob = predict_document_probability(combined_text) if combined_text else 0.5
     
-    # Create combined summary
-    project_summary = f"RFP Project: {project_title}\n\nContains {len(uploaded_files)} files:\n" + "\n".join(file_summaries)
-    if combined_text:
-        project_summary += f"\n\nOverall Summary: {generate_document_summary(combined_text, 3)}"
+    # Create comprehensive project summary
+    project_summary = _create_project_summary(project_title, uploaded_files, file_summaries, combined_text, total_word_count)
     
-    # Save each file with project information
+    # Save each file with unified project information
     for idx, uploaded_file in enumerate(uploaded_files):
         entry = {
             "filename": uploaded_file.name,
             "title": titles[idx],
             "sender": senders[idx], 
             "decision": decisions[idx],
-            "probability": prob,  # Same probability for all files in project
-            "summary": project_summary  # Same project summary for all files
+            "probability": prob,  # Unified probability for all files in project
+            "summary": project_summary  # Comprehensive project summary for all files
         }
         add_entry_to_db(entry)
     
@@ -412,3 +437,82 @@ def _process_individually(uploaded_files, titles, senders, decisions, progress_b
         
         add_entry_to_db(entry)
         st.success(f"{uploaded_file.name} processed successfully! Score: {prob:.1%}")
+
+def _categorize_document_content(filename, text):
+    """
+    Categorizes document content based on filename patterns and content analysis.
+    Helps organize multi-document RFPs into logical sections for better analysis.
+    """
+    filename_lower = filename.lower()
+    text_lower = text.lower()
+    
+    # Check filename patterns first
+    if any(term in filename_lower for term in ['summary', 'executive', 'overview', 'intro']):
+        return 'executive_summary'
+    elif any(term in filename_lower for term in ['spec', 'technical', 'requirement', 'scope']):
+        return 'technical_specs'
+    elif any(term in filename_lower for term in ['budget', 'cost', 'financial', 'price', 'billing']):
+        return 'financial_info'
+    
+    # Check content patterns if filename doesn't match
+    executive_terms = ['executive summary', 'overview', 'project description', 'background']
+    technical_terms = ['specifications', 'requirements', 'technical', 'scope of work', 'deliverables']
+    financial_terms = ['budget', 'cost', 'price', 'financial', 'payment terms', 'billing']
+    
+    if any(term in text_lower for term in executive_terms):
+        return 'executive_summary'
+    elif any(term in text_lower for term in technical_terms):
+        return 'technical_specs'
+    elif any(term in text_lower for term in financial_terms):
+        return 'financial_info'
+    
+    return 'general_content'
+
+def _create_structured_combination(combined_sections, project_title):
+    """
+    Creates an intelligently structured combination of all project documents.
+    Organizes content in a logical order for optimal AI analysis.
+    """
+    structured_text = f"RFP PROJECT: {project_title}\n\n"
+    
+    # Combine in logical order: Executive Summary → Technical → Financial → General
+    section_order = ['executive_summary', 'technical_specs', 'financial_info', 'general_content']
+    section_titles = {
+        'executive_summary': 'EXECUTIVE SUMMARY & OVERVIEW',
+        'technical_specs': 'TECHNICAL SPECIFICATIONS & REQUIREMENTS', 
+        'financial_info': 'FINANCIAL & BUDGET INFORMATION',
+        'general_content': 'ADDITIONAL PROJECT INFORMATION'
+    }
+    
+    for section_key in section_order:
+        if combined_sections[section_key]:
+            structured_text += f"\n\n=== {section_titles[section_key]} ===\n\n"
+            
+            for doc in combined_sections[section_key]:
+                structured_text += f"--- From {doc['filename']} ---\n"
+                structured_text += doc['content']
+                structured_text += "\n\n"
+    
+    return structured_text
+
+def _create_project_summary(project_title, uploaded_files, file_summaries, combined_text, total_word_count):
+    """
+    Creates a comprehensive summary for the entire RFP project.
+    """
+    summary_parts = [
+        f"🎯 RFP PROJECT: {project_title}",
+        f"📁 Multi-Document Project ({len(uploaded_files)} files, {total_word_count:,} words)",
+        "",
+        "📄 PROJECT COMPONENTS:",
+    ]
+    
+    summary_parts.extend(file_summaries)
+    
+    if combined_text:
+        summary_parts.extend([
+            "",
+            "📋 OVERALL PROJECT SUMMARY:",
+            generate_document_summary(combined_text, 4)  # Longer summary for projects
+        ])
+    
+    return "\n".join(summary_parts)

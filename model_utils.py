@@ -76,139 +76,131 @@ def prepare_training_data():
     content, and converts text summaries and decisions into format suitable for model training.
     Returns paired lists of text content and binary labels (1=Approved, 0=Denied).
     """
+    print("[DEBUG] Loading historical decisions for training data preparation...")
     historical_df = load_historical_decisions()
     
+    print(f"[DEBUG] Found {len(historical_df)} historical decisions")
+    
     if len(historical_df) < 2:
-        print("[INFO] Not enough historical data for training (need at least 2 examples)")
+        print(f"[WARNING] Not enough historical data for training (need at least 2 examples, found {len(historical_df)})")
         return None, None
     
     texts = []
     labels = []
+    skipped_count = 0
     
-    for _, row in historical_df.iterrows():
+    for idx, row in historical_df.iterrows():
         summary = row.get('summary', '')
+        decision = row.get('decision', '')
+        
+        print(f"[DEBUG] Processing entry {idx}: decision={decision}, summary_length={len(summary) if summary else 0}")
+        
         if summary and len(summary.strip()) > 20:  # Ensure meaningful content
             texts.append(summary)
             # Convert decision to binary label: Approved=1, Denied=0
-            labels.append(1 if row['decision'] == 'Approved' else 0)
+            label = 1 if row['decision'] == 'Approved' else 0
+            labels.append(label)
+            print(f"[DEBUG] Added training example: label={label}, summary_preview='{summary[:50]}...'")
+        else:
+            skipped_count += 1
+            print(f"[DEBUG] Skipped entry {idx}: insufficient summary content")
+    
+    print(f"[DEBUG] Training data preparation complete:")
+    print(f"[DEBUG] - Valid examples: {len(texts)}")
+    print(f"[DEBUG] - Skipped examples: {skipped_count}")
+    print(f"[DEBUG] - Label distribution: {dict(zip(*np.unique(labels, return_counts=True))) if labels else 'No labels'}")
     
     if len(texts) < 2:
-        print("[INFO] Not enough valid training examples")
+        print(f"[WARNING] Not enough valid training examples (need at least 2, found {len(texts)})")
         return None, None
     
     return texts, labels
 
-def fine_tune_model(epochs: int = 3, batch_size: int = 2, learning_rate: float = 2e-5):
+def fine_tune_model(epochs: int = 2, batch_size: int = 1, learning_rate: float = 2e-5):
     """
-    Fine-tunes the Longformer model on historical RFP decision data.
-    This function implements the complete training pipeline including data preparation,
-    model setup, training loop with validation, and model persistence. It adapts the
-    pre-trained Longformer to better understand RFP-specific patterns and decision criteria.
-    Returns True if fine-tuning succeeds and model is saved, False otherwise.
+    SIMPLIFIED Fine-tuning process for the RFP classification model.
+    This streamlined version focuses on effectiveness over complexity, using
+    a minimal but robust training approach that works well with limited data.
     """
     global model
     
-    print(f"[INFO] Starting fine-tuning process...")
+    print(f"🚀 [SIMPLE TRAINING] Starting streamlined fine-tuning...")
     
     # Prepare data
     texts, labels = prepare_training_data()
     if texts is None:
+        print("❌ [ERROR] Not enough training data available")
         return False
     
-    print(f"[INFO] Training on {len(texts)} examples")
+    print(f"📊 [INFO] Training with {len(texts)} examples")
+    label_counts = dict(zip(*np.unique(labels, return_counts=True)))
+    print(f"📈 [INFO] Data: {label_counts}")
     
-    # Split data if we have enough examples
-    if len(texts) >= 4:
-        train_texts, val_texts, train_labels, val_labels = train_test_split(
-            texts, labels, test_size=0.2, random_state=42, stratify=labels
-        )
-    else:
-        # Use all data for training if we don't have enough for validation
-        train_texts, train_labels = texts, labels
-        val_texts, val_labels = [], []
+    # SIMPLIFIED: Use ALL data for training (no validation split for small datasets)
+    # This maximizes learning from limited data
+    print(f"💡 [STRATEGY] Using all data for training (maximizes learning)")
     
-    # Create datasets
-    train_dataset = RFPDataset(train_texts, train_labels, tokenizer)
+    # Check device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"⚙️ [DEVICE] Using: {device}")
+    
+    # Create dataset and dataloader
+    train_dataset = RFPDataset(texts, labels, tokenizer)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    print(f"📦 [DATA] Created {len(train_dataloader)} training batches")
     
-    val_dataloader = None
-    if val_texts:
-        val_dataset = RFPDataset(val_texts, val_labels, tokenizer)
-        val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
-    
-    # Setup optimizer and scheduler
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    # Setup optimizer (simplified)
+    optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
     total_steps = len(train_dataloader) * epochs
+    
+    # SIMPLIFIED: Basic scheduler
     scheduler = get_linear_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=0,
-        num_training_steps=total_steps
+        optimizer, num_warmup_steps=0, num_training_steps=total_steps
     )
     
-    # Training loop
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Move model and start training
     model.to(device)
     model.train()
     
+    print(f"🏃 [TRAINING] Starting {epochs} epochs with {total_steps} total steps")
+    
     for epoch in range(epochs):
-        total_loss = 0
+        epoch_loss = 0
+        print(f"\n🔄 [EPOCH {epoch + 1}/{epochs}] Starting...")
         
-        print(f"[INFO] Epoch {epoch + 1}/{epochs}")
-        
-        for batch in train_dataloader:
+        for batch_idx, batch in enumerate(train_dataloader):
             optimizer.zero_grad()
             
+            # Move batch to device
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            labels = batch['labels'].to(device)
+            batch_labels = batch['labels'].to(device)
             
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            # Forward pass
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=batch_labels)
             loss = outputs.loss
             
+            # Backward pass
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
             
-            total_loss += loss.item()
+            epoch_loss += loss.item()
+            print(f"   Batch {batch_idx + 1}: loss = {loss.item():.4f}")
         
-        avg_loss = total_loss / len(train_dataloader)
-        print(f"[INFO] Average loss for epoch {epoch + 1}: {avg_loss:.4f}")
-        
-        # Validation if we have validation data
-        if val_dataloader:
-            model.eval()
-            val_loss = 0
-            correct = 0
-            total = 0
-            
-            with torch.no_grad():
-                for batch in val_dataloader:
-                    input_ids = batch['input_ids'].to(device)
-                    attention_mask = batch['attention_mask'].to(device)
-                    labels = batch['labels'].to(device)
-                    
-                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                    val_loss += outputs.loss.item()
-                    
-                    predictions = torch.argmax(outputs.logits, dim=-1)
-                    correct += (predictions == labels).sum().item()
-                    total += labels.size(0)
-            
-            accuracy = correct / total
-            avg_val_loss = val_loss / len(val_dataloader)
-            print(f"[INFO] Validation - Loss: {avg_val_loss:.4f}, Accuracy: {accuracy:.4f}")
-            
-            model.train()
+        avg_loss = epoch_loss / len(train_dataloader)
+        print(f"✅ [EPOCH {epoch + 1}] Completed - Average Loss: {avg_loss:.4f}")
     
-    # Save the fine-tuned model
+    # Save the model
+    print(f"💾 [SAVE] Saving fine-tuned model...")
     try:
         model.save_pretrained(MODEL_SAVE_PATH)
         tokenizer.save_pretrained(MODEL_SAVE_PATH)
-        print(f"[INFO] Fine-tuned model saved to {MODEL_SAVE_PATH}")
+        print(f"🎉 [SUCCESS] Model saved to {MODEL_SAVE_PATH}")
         return True
     except Exception as e:
-        print(f"[ERROR] Failed to save model: {e}")
+        print(f"❌ [ERROR] Failed to save: {e}")
         return False
 # This function is used to chunk text into manageable pieces for processing
 # It ensures that each chunk does not exceed the maximum token limit of the model
@@ -388,18 +380,21 @@ def predict_document_probability(text, auto_finetune=True):
     
     print(f"[DEBUG] Starting enhanced prediction for document...")
     
-    # Check if we should trigger auto fine-tuning
+    # SIMPLIFIED: Check if we should auto-train (less complex conditions)
     if auto_finetune:
         historical_df = load_historical_decisions()
-        # Auto fine-tune if we have enough new decisions and no fine-tuned model exists
-        if (len(historical_df) >= 5 and not os.path.exists(MODEL_SAVE_PATH)) or \
-           (len(historical_df) >= 10 and len(historical_df) % 10 == 0):  # Re-train every 10 new decisions
-            print(f"[INFO] Triggering automatic fine-tuning with {len(historical_df)} historical decisions")
-            fine_tune_success = fine_tune_model()
+        num_decisions = len(historical_df)
+        has_model = os.path.exists(MODEL_SAVE_PATH)
+        
+        # Simple rule: Auto-train every 5 new decisions, or if we have 3+ and no custom model
+        should_train = (num_decisions >= 3 and not has_model) or (num_decisions > 0 and num_decisions % 5 == 0)
+        
+        if should_train:
+            print(f"🤖 [AUTO-TRAIN] Triggering automatic training with {num_decisions} decisions")
+            fine_tune_success = fine_tune_model(epochs=1, batch_size=1)  # Quick training
             if fine_tune_success:
-                # Reload the fine-tuned model
                 model = LongformerForSequenceClassification.from_pretrained(MODEL_SAVE_PATH)
-                print("[INFO] Fine-tuned model reloaded successfully")
+                print("✅ [AUTO-TRAIN] Model updated successfully")
     
     # Get base model prediction
     chunks = chunk_text(text)
@@ -468,14 +463,44 @@ def predict_document_probability(text, auto_finetune=True):
 
 def manual_fine_tune():
     """
-    Manually triggers the fine-tuning process for the RFP classification model.
-    This function provides an explicit way to initiate model fine-tuning outside
-    of the automatic triggers. Useful for forcing model updates when you want
-    to incorporate new historical data immediately rather than waiting for
-    automatic fine-tuning conditions to be met.
+    SIMPLIFIED manual fine-tuning trigger with clear feedback.
+    This provides an easy way to improve the model when you have new decisions.
     """
-    print("[INFO] Manual fine-tuning triggered")
-    return fine_tune_model()
+    print("🎯 [MANUAL TRAINING] Initiating model improvement...")
+    
+    # Quick data check
+    historical_df = load_historical_decisions()
+    approved_count = len(historical_df[historical_df['decision'] == 'Approved']) if not historical_df.empty else 0
+    denied_count = len(historical_df[historical_df['decision'] == 'Denied']) if not historical_df.empty else 0
+    total_decisions = len(historical_df)
+    
+    print(f"📊 [DATA CHECK] Found {total_decisions} decisions ({approved_count} approved, {denied_count} denied)")
+    
+    if total_decisions < 2:
+        print(f"⚠️ [INSUFFICIENT DATA] Need at least 2 decisions to train. Currently have {total_decisions}.")
+        print("💡 [TIP] Make some approve/deny decisions first, then try training again.")
+        return False
+    
+    if approved_count == 0 or denied_count == 0:
+        print(f"⚠️ [UNBALANCED DATA] Need both approved AND denied examples.")
+        print(f"   Current: {approved_count} approved, {denied_count} denied")
+        print("💡 [TIP] Make decisions in both categories for better training.")
+        return False
+    
+    print(f"✅ [READY] Sufficient data for training!")
+    print(f"🚀 [STARTING] Beginning simplified fine-tuning process...")
+    
+    success = fine_tune_model(epochs=2, batch_size=1)  # Simplified parameters
+    
+    if success:
+        print(f"🎉 [SUCCESS] Model training completed!")
+        print(f"💡 [NEXT STEPS] Your model is now personalized to your decisions.")
+        print(f"🔄 [SUGGESTION] Consider running 'Rerun Model' to update existing predictions.")
+    else:
+        print(f"❌ [FAILED] Training didn't complete successfully.")
+        print(f"🔍 [DEBUG] Check the logs above for specific errors.")
+    
+    return success
 
 def evaluate_model_accuracy(threshold=0.5, test_size=0.3, verbose=True):
     """
@@ -530,10 +555,22 @@ def evaluate_model_accuracy(threshold=0.5, test_size=0.3, verbose=True):
         return result
     
     # Split data for evaluation
-    train_texts, test_texts, train_labels, test_labels = train_test_split(
-        texts, true_labels, test_size=test_size, random_state=42, 
-        stratify=true_labels if len(set(true_labels)) > 1 else None
-    )
+    # Check if we can use stratification (need at least 2 examples of each class)
+    label_counts = dict(zip(*np.unique(true_labels, return_counts=True)))
+    can_stratify = len(set(true_labels)) > 1 and all(count >= 2 for count in label_counts.values())
+    
+    if can_stratify:
+        if verbose:
+            print("[DEBUG] Using stratified split for evaluation")
+        train_texts, test_texts, train_labels, test_labels = train_test_split(
+            texts, true_labels, test_size=test_size, random_state=42, stratify=true_labels
+        )
+    else:
+        if verbose:
+            print("[DEBUG] Using random split for evaluation (insufficient data for stratification)")
+        train_texts, test_texts, train_labels, test_labels = train_test_split(
+            texts, true_labels, test_size=test_size, random_state=42
+        )
     
     if verbose:
         print(f"[INFO] Training set: {len(train_texts)} samples")
@@ -707,14 +744,21 @@ def get_model_info():
     Essential for understanding model readiness and data availability before running
     evaluations or making predictions. Used by evaluation tools and diagnostic functions.
     """
+    print("[DEBUG] Getting model info...")
     historical_df = load_historical_decisions()
     has_finetuned = os.path.exists(MODEL_SAVE_PATH)
     
-    return {
+    approved_count = len(historical_df[historical_df['decision'] == 'Approved']) if not historical_df.empty else 0
+    denied_count = len(historical_df[historical_df['decision'] == 'Denied']) if not historical_df.empty else 0
+    
+    info = {
         'has_fine_tuned_model': has_finetuned,
         'historical_decisions': len(historical_df),
-        'approved_count': len(historical_df[historical_df['decision'] == 'Approved']) if not historical_df.empty else 0,
-        'denied_count': len(historical_df[historical_df['decision'] == 'Denied']) if not historical_df.empty else 0,
+        'approved_count': approved_count,
+        'denied_count': denied_count,
         'model_path': MODEL_SAVE_PATH if has_finetuned else MODEL_NAME
     }
+    
+    print(f"[DEBUG] Model info: {info}")
+    return info
 

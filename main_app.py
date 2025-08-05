@@ -164,12 +164,18 @@ def render_database_controls(df):
         model_info = get_model_info()
         historical_count = model_info['historical_decisions']
         
+        print(f"[DEBUG] Model info: historical_decisions={historical_count}")
+        print(f"[DEBUG] Model info keys: {list(model_info.keys())}")
+        
         # Show fine-tuning button if we have enough data
         if historical_count >= 2:
+            print(f"[DEBUG] Enabling fine-tune button (sufficient data: {historical_count})")
             if st.button("🎯 Fine-tune Model", use_container_width=True, 
                         help=f"Train model on your {historical_count} decisions for better accuracy"):
+                print("[DEBUG] Fine-tune button clicked")
                 handle_fine_tuning()
         else:
+            print(f"[DEBUG] Disabling fine-tune button (insufficient data: {historical_count})")
             st.button("🎯 Fine-tune Model", use_container_width=True, 
                      disabled=True, help="Need at least 2 decisions to fine-tune")
     
@@ -233,15 +239,26 @@ def handle_fine_tuning():
     Includes error handling and user notifications to ensure a smooth experience
     during the model optimization process.
     """
+    print("[DEBUG] Fine-tuning initiated from UI")
+    
+    # Show initial status
+    st.info("🔧 Initializing fine-tuning process...")
+    
     with st.spinner("Fine-tuning model on your decisions... This may take a few minutes."):
         try:
+            print("[DEBUG] Calling manual_fine_tune() function")
             success = manual_fine_tune()
+            print(f"[DEBUG] Fine-tuning result: {success}")
+            
             if success:
+                print("[DEBUG] Fine-tuning completed successfully")
                 st.success("🎯 Model fine-tuning completed successfully! The model is now optimized for your decision patterns.")
                 st.info("💡 Future predictions will be more accurate. Consider rerunning predictions for existing entries.")
             else:
+                print("[DEBUG] Fine-tuning failed")
                 st.error("❌ Fine-tuning failed. Please check the logs for details.")
         except Exception as e:
+            print(f"[ERROR] Fine-tuning exception: {str(e)}")
             st.error(f"❌ Fine-tuning error: {str(e)}")
     st.rerun()
 
