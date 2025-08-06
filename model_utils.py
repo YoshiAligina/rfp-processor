@@ -554,6 +554,9 @@ def predict_document_probability(text, auto_finetune=True):
         # Get last training count from tracking file
         last_trained_count = get_last_training_count()
         
+        # Debug info
+        print(f"[DEBUG] Training check: {num_decisions} decisions, last trained at {last_trained_count}")
+        
         if not has_model and num_decisions >= 5:
             # First training at 5 entries
             should_train = True
@@ -565,11 +568,18 @@ def predict_document_probability(text, auto_finetune=True):
         
         if should_train:
             print(f"🤖 [AUTO-TRAIN] Starting automatic fine-tuning...")
-            fine_tune_success = fine_tune_model(epochs=2, batch_size=1)  # 2 epochs for better learning
-            if fine_tune_success:
-                model = LongformerForSequenceClassification.from_pretrained(MODEL_SAVE_PATH)
-                save_training_count(num_decisions)  # Track when we last trained
-                print("✅ [AUTO-TRAIN] Model updated successfully")
+            try:
+                fine_tune_success = fine_tune_model(epochs=2, batch_size=1)  # 2 epochs for better learning
+                if fine_tune_success:
+                    # Reload model and save training count
+                    model = LongformerForSequenceClassification.from_pretrained(MODEL_SAVE_PATH)
+                    save_training_count(num_decisions)  # Track when we last trained
+                    print("✅ [AUTO-TRAIN] Model updated successfully")
+                else:
+                    print("❌ [AUTO-TRAIN] Training failed, continuing with existing model")
+            except Exception as e:
+                print(f"⚠️ [AUTO-TRAIN] Training error: {e}")
+                print("Continuing with existing model...")
     
     # Get base model prediction
     chunks = chunk_text(text)

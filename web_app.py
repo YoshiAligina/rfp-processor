@@ -468,6 +468,6 @@ def consolidate_projects():
     return redirect(url_for('database'))
 
 if __name__ == '__main__':
-    # Configure Flask to be less aggressive with file watching
-    # This prevents constant reloads during model processing
-    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=True, reloader_interval=10)
+    # Production mode - debug disabled to prevent constant restarts
+    # This allows stable model processing without interruptions
+    app.run(debug=False, host='0.0.0.0', port=5000, use_reloader=False)
